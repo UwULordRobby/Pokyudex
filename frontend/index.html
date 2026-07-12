@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokyudex — Home</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>:root { --dot-color: #ffffff; }</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="side-menu-trigger">
+        <button class="hamburger-btn" aria-label="Menu">☰</button>
+        <div class="side-menu-panel">
+          <a href="binder.html" class="side-menu-link">📁 Binders</a>
+          <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
+          <a href="collezione.html" class="side-menu-link">★ My Collection</a>
+        </div>
+      </div>
+      <a href="index.html" class="icon-btn" aria-label="Home" title="Home">🏠</a>
+      <a href="index.html" class="brand"><span class="dot"></span> Pokyudex</a>
+    </div>
+    <div class="topbar-right">
+      <button class="btn" id="about-btn" title="About the creator">👤 About</button>
+      <span id="current-username" class="user-badge"></span>
+      <button class="btn" onclick="logoutUser()">Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="eyebrow">Pokyudex &mdash; Search Panel</div>
+    <h1>What would you like to search for today?</h1>
+    
+    <div class="filters" style="position: static; background: none; backdrop-filter: none; border-bottom: none; padding: 10px 0 20px;">
+      <div class="chip active" id="tab-sets-btn">Browse Sets</div>
+      <div class="chip" id="tab-cards-btn">Global Card Search</div>
+    </div>
+
+    <div id="section-sets">
+      <div id="favorites-section" style="display: none; margin-bottom: 34px; border-bottom: 1px solid var(--border); padding-bottom: 24px;">
+        <div class="eyebrow">Quick Access</div>
+        <h2 style="font-family: 'Rajdhani', sans-serif; font-size: 24px; margin: 0 0 16px;">Favorite Sets</h2>
+        <div id="favorites-container"></div>
+      </div>
+
+      <input type="text" class="search-bar" id="search-input" placeholder="Search a set, e.g. Noble Victories..." />
+      <div id="sets-container" style="margin-top: 20px;">
+        <div class="state-msg"><span class="spinner"></span>Loading sets...</div>
+      </div>
+    </div>
+
+    <div id="section-cards" style="display: none;">
+      <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 10px;">
+        <input type="text" class="search-bar" id="card-name-input" placeholder="Card name (e.g. Charizard)..." style="margin-top: 0; flex: 1; min-width: 220px;" />
+        
+        <select id="card-rarity-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 220px; height: 41px; padding: 0 14px;">
+          <option value="">-- Any Rarity --</option>
+        </select>
+
+        <select id="sort-cards-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 200px; height: 41px; padding: 0 14px;">
+          <option value="price_desc">Price: highest first</option>
+          <option value="price_asc">Price: lowest first</option>
+          <option value="rarity_desc">Rarity: rarest first</option>
+          <option value="rarity_asc">Rarity: least rare first</option>
+          <option value="date_desc">Date: newest first</option>
+          <option value="date_asc">Date: oldest first</option>
+        </select>
+        
+        <button class="btn btn-accent" id="search-cards-btn" style="height: 41px;">Search Cards</button>
+      </div>
+      
+      <div id="global-cards-container" style="margin-top: 24px;">
+        <div class="state-msg">Enter a card name or select a rarity to get started.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="card-modal" class="modal" onclick="closeModal()">
+    <span class="modal-close">&times;</span>
+    <img class="modal-content" id="modal-img" src="" alt="Card zoom" />
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    // Soft, low-saturation "ivory" palette matching the home page's
+    // white brand dot — a pearlescent glow rather than a colorful one.
+    renderBloomLayer([
+      { h: 42,  s: 30, l: 88 },
+      { h: 0,   s: 0,  l: 96 },
+      { h: 200, s: 22, l: 80 },
+    ]);
+
+    let allSets = [];
+    let globalSearchResults = []; // Caches loaded results so they can be sorted on the fly
+    let raritiesLoaded = false;
+
+    const tabSetsBtn = document.getElementById('tab-sets-btn');
+    const tabCardsBtn = document.getElementById('tab-cards-btn');
+    const sectionSets = document.getElementById('section-sets');
+    const sectionCards = document.getElementById('section-cards');
+
+    tabSetsBtn.addEventListener('click', () => {
+      tabSetsBtn.className = 'chip active';
+      tabCardsBtn.className = 'chip';
+      sectionSets.style.display = 'block';
+      sectionCards.style.display = 'none';
+    });
+
+    tabCardsBtn.addEventListener('click', () => {
+      tabCardsBtn.className = 'chip active';
+      tabSetsBtn.className = 'chip';
+      sectionSets.style.display = 'none';
+      sectionCards.style.display = 'block';
+      const currentName = document.getElementById('card-name-input').value.trim();
+      loadGlobalRarities(currentName); 
+    });
+
+    function renderSetsPage() {
+      const query = document.getElementById('search-input').value.toLowerCase();
+      const filteredSets = allSets.filter((s) => s.name.toLowerCase().includes(query));
+      const favoriteSets = allSets.filter((s) => s.is_favorite);
+      const favSection = document.getElementById('favorites-section');
+      
+      if (favoriteSets.length > 0 && !query) {
+        favSection.style.display = 'block';
+        renderSetsGrid(favoriteSets, document.getElementById('favorites-container'));
+      } else {
+        favSection.style.display = 'none';
+      }
+      renderSetsGrid(filteredSets, document.getElementById('sets-container'));
+    }
+
+    function renderSetsGrid(sets, container) {
+      if (!sets.length) {
+        container.innerHTML = '<div class="state-msg">No sets found.</div>';
+        return;
+      }
+      const grid = document.createElement('div');
+      grid.className = 'sets-grid';
+      sets.forEach((s) => {
+        const tile = document.createElement('div');
+        tile.className = 'set-tile';
+        tile.style.position = 'relative';
+        tile.onclick = () => { window.location.href = `set.html?id=${encodeURIComponent(s.id)}`; };
+        tile.innerHTML = `
+          <button class="collect-btn ${s.is_favorite ? 'owned' : ''}" style="top: 8px; right: 8px; left: auto; font-size:14px;" onclick="event.stopPropagation(); toggleFavoriteSet('${s.id}', this)">★</button>
+          ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
+          <div class="set-name">${escapeHtml(s.name)}</div>
+          <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+        `;
+        grid.appendChild(tile);
+      });
+      container.innerHTML = '';
+      container.appendChild(grid);
+    }
+
+    async function loadSets() {
+      const container = document.getElementById('sets-container');
+      try {
+        const data = await api('/api/sets');
+        allSets = data;
+        renderSetsPage();
+      } catch (err) {
+        container.innerHTML = `<div class="state-msg error">Error loading: ${err.message}</div>`;
+      }
+    }
+
+    document.getElementById('search-input').addEventListener('input', () => { renderSetsPage(); });
+
+    document.getElementById('about-btn').addEventListener('click', showAboutModal);
+
+    const GLOBAL_RARITY_ORDER = [
+      "Common", "Uncommon", "Promo", "Classic Collection", "Rare", "Rare Holo", "Rare BREAK",
+      "Rare Holo EX", "Rare Holo GX", "Rare Holo LV.X", "Rare Holo V", "Rare Holo VMAX",
+      "Rare Holo VSTAR", "Double Rare", "Ultra Rare", "Amazing Rare", "Radiant Rare",
+      "Illustration Rare", "Special Illustration Rare", "MEGA_ATTACK_RARE", "Mega Attack Rare",
+      "Mega Hyper Rare", "Trainer Gallery Rare Holo", "Shiny Rare", "Shiny Ultra Rare",
+      "ACE SPEC Rare", "Black White Rare", "Rare Secret", "Secret Rare", "Rare Rainbow", "Hyper Rare"
+    ];
+
+    async function loadGlobalRarities(name = "") {
+      const select = document.getElementById('card-rarity-select');
+      const currentSelected = select.value; 
+      try {
+        const url = name ? `/api/rarities?name=${encodeURIComponent(name)}` : '/api/rarities';
+        const rarities = await api(url);
+        const sortedRarities = rarities.sort((a, b) => {
+          let indexA = GLOBAL_RARITY_ORDER.findIndex(r => r.toLowerCase() === a.toLowerCase());
+          let indexB = GLOBAL_RARITY_ORDER.findIndex(r => r.toLowerCase() === b.toLowerCase());
+          if (indexA === -1) indexA = 999;
+          if (indexB === -1) indexB = 999;
+          return indexA - indexB;
+        });
+
+        select.innerHTML = '<option value="">-- Any Rarity --</option>';
+        let stillExists = false;
+        sortedRarities.forEach(r => {
+          const opt = document.createElement('option');
+          opt.value = r; opt.textContent = r;
+          if (r === currentSelected) { opt.selected = true; stillExists = true; }
+          select.appendChild(opt);
+        });
+        if (!stillExists && currentSelected !== "") { select.value = ""; }
+        raritiesLoaded = !name; 
+      } catch (err) { console.error(err); }
+    }
+
+    let rarityDebounceTimer;
+    document.getElementById('card-name-input').addEventListener('input', (e) => {
+      clearTimeout(rarityDebounceTimer);
+      rarityDebounceTimer = setTimeout(() => { loadGlobalRarities(e.target.value.trim()); }, 300);
+    });
+
+    function sortCards(cardsArray, criteria) {
+      return [...cardsArray].sort((a, b) => {
+        if (criteria === 'price_desc') return (b.price_market ?? -1) - (a.price_market ?? -1);
+        if (criteria === 'price_asc') return (a.price_market ?? Infinity) - (b.price_market ?? Infinity);
+        if (criteria === 'rarity_desc') {
+          let idxA = GLOBAL_RARITY_ORDER.findIndex(r => r.toLowerCase() === (a.rarity || "").toLowerCase());
+          let idxB = GLOBAL_RARITY_ORDER.findIndex(r => r.toLowerCase() === (b.rarity || "").toLowerCase());
+          return idxB - idxA;
+        }
+        if (criteria === 'rarity_asc') {
+          let idxA = GLOBAL_RARITY_ORDER.findIndex(r => r.toLowerCase() === (a.rarity || "").toLowerCase());
+          let idxB = GLOBAL_RARITY_ORDER.findIndex(r => r.toLowerCase() === (b.rarity || "").toLowerCase());
+          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+        }
+        if (criteria === 'date_desc') return (b.release_date || "").localeCompare(a.release_date || "");
+        if (criteria === 'date_asc') return (a.release_date || "").localeCompare(b.release_date || "");
+        return 0;
+      });
+    }
+
+    function renderGlobalCards() {
+      const container = document.getElementById('global-cards-container');
+      if (!globalSearchResults.length) return;
+
+      const currentCriteria = document.getElementById('sort-cards-select').value;
+      const sorted = sortCards(globalSearchResults, currentCriteria);
+
+      const grid = document.createElement('div');
+      grid.className = 'cards-grid';
+      sorted.forEach((c) => {
+        const priceLabel = formatPrice(c.price_market, c.currency);
+        const tile = document.createElement('div');
+        tile.className = 'card-tile';
+        const bigImgUrl = c.image_large || c.image_small || '';
+        tile.onclick = () => openModal(bigImgUrl);
+
+        tile.innerHTML = `
+          <button class="collect-btn ${c.is_owned ? 'owned' : ''}" onclick="event.stopPropagation(); toggleOwn('${c.id}', this)">★</button>
+          <button class="wish-btn ${c.is_wished ? 'wished' : ''}" onclick="event.stopPropagation(); toggleWish('${c.id}', this)">❤️</button>
+          <img src="${escapeHtml(c.image_large || c.image_small || '')}" alt="${escapeHtml(c.name)}" loading="lazy" onerror="this.src='${escapeHtml(c.image_small || '')}'">
+          <div class="price-tag ${priceLabel ? '' : 'no-price'}">${priceLabel || 'n/a'}</div>
+          <div class="card-info">
+            <div class="card-name">${escapeHtml(c.name)}${c.card_number ? ' · #' + escapeHtml(c.card_number) : ''}</div>
+            <div class="card-rarity" style="color: var(--teal); font-weight: 600; margin-bottom: 2px;">${escapeHtml(c.set_name || 'Unknown set')}</div>
+            <div class="card-rarity">${escapeHtml(c.rarity || 'Unknown rarity')}</div>
+          </div>
+        `;
+        grid.appendChild(tile);
+      });
+      container.innerHTML = '';
+      container.appendChild(grid);
+    }
+
+    async function searchCardsGlobal() {
+      const name = document.getElementById('card-name-input').value.trim();
+      const rarity = document.getElementById('card-rarity-select').value;
+      const container = document.getElementById('global-cards-container');
+
+      if (!name && !rarity) {
+        container.innerHTML = '<div class="state-msg error">Enter a card name or select a rarity to filter.</div>';
+        return;
+      }
+      container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Searching...</div>';
+
+      try {
+        const url = `/api/cards/search?name=${encodeURIComponent(name)}&rarity=${encodeURIComponent(rarity)}`;
+        globalSearchResults = await api(url);
+        
+        if (!globalSearchResults.length) {
+          container.innerHTML = '<div class="state-msg">No cards found matching the selected filters.</div>';
+          return;
+        }
+        renderGlobalCards();
+      } catch (err) { container.innerHTML = `<div class="state-msg error">Error: ${err.message}</div>`; }
+    }
+
+    document.getElementById('search-cards-btn').addEventListener('click', searchCardsGlobal);
+    document.getElementById('sort-cards-select').addEventListener('change', renderGlobalCards);
+    document.getElementById('card-name-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchCardsGlobal(); });
+
+    function openModal(imgUrl) {
+      if (!imgUrl) return;
+      document.getElementById('card-modal').style.display = "flex";
+      document.getElementById('modal-img').src = imgUrl;
+    }
+    function closeModal() { document.getElementById('card-modal').style.display = "none"; }
+
+    async function toggleOwn(cardId, btn) {
+      try {
+        const res = await api('/api/collection/toggle', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ card_id: cardId })
+        });
+        if (res.is_owned) btn.classList.add('owned'); else btn.classList.remove('owned');
+        const card = globalSearchResults.find(c => c.id === cardId);
+        if (card) card.is_owned = res.is_owned;
+      } catch (err) { alert(err.message); }
+    }
+
+    async function toggleWish(cardId, btn) {
+      try {
+        const res = await api('/api/wishlist/toggle', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ card_id: cardId })
+        });
+        if (res.is_wished) btn.classList.add('wished'); else btn.classList.remove('wished');
+        const card = globalSearchResults.find(c => c.id === cardId);
+        if (card) card.is_wished = res.is_wished;
+      } catch (err) { alert(err.message); }
+    }
+
+    async function toggleFavoriteSet(setId, btn) {
+      try {
+        const res = await api('/api/sets/toggle-favorite', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ set_id: setId })
+        });
+        const set = allSets.find(s => s.id === setId);
+        if (set) set.is_favorite = res.is_favorite;
+        renderSetsPage();
+      } catch (err) { alert(err.message); }
+    }
+
+    requireAuth().then(user => { if (user) loadSets(); });
+  </script>
+</body>
+</html>

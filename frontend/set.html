@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokyudex — Set</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="side-menu-trigger">
+        <button class="hamburger-btn" aria-label="Menu">☰</button>
+        <div class="side-menu-panel">
+          <a href="binder.html" class="side-menu-link">📁 Binders</a>
+          <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
+          <a href="collezione.html" class="side-menu-link">★ My Collection</a>
+        </div>
+      </div>
+      <a href="index.html" class="icon-btn" aria-label="Home" title="Home">🏠</a>
+      <a href="index.html" class="brand"><span class="dot"></span> Pokyudex</a>
+    </div>
+    <div class="topbar-right">
+      <button class="btn" id="about-btn" title="About the creator">👤 About</button>
+      <span id="current-username" class="user-badge"></span>
+      <button class="btn" onclick="logoutUser()">Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="header-row">
+      <div>
+        <div class="eyebrow" id="set-series"></div>
+        <h1 id="set-name">Loading...</h1>
+      </div>
+      
+      <div>
+        <select id="sort-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 220px; height: 41px; padding: 0 14px;">
+          <option value="price_desc">Price: highest first</option>
+          <option value="price_asc">Price: lowest first</option>
+          <option value="rarity_desc">Rarity: rarest first</option>
+          <option value="rarity_asc">Rarity: least rare first</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="filters" id="filters"></div>
+
+    <div id="cards-container">
+      <div class="state-msg"><span class="spinner"></span>Loading cards...</div>
+    </div>
+  </div>
+
+  <div id="card-modal" class="modal" onclick="closeModal()">
+    <span class="modal-close">&times;</span>
+    <img class="modal-content" id="modal-img" src="" alt="Card zoom" />
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const setId = params.get('id');
+    let allCards = [];
+    let activeRarity = null;
+
+    const RARITY_ORDER = [
+      "Common", "Uncommon", "Promo", "Classic Collection", "Rare", "Rare Holo", "Rare BREAK",
+      "Rare Holo EX", "Rare Holo GX", "Rare Holo LV.X", "Rare Holo V", "Rare Holo VMAX",
+      "Rare Holo VSTAR", "Double Rare", "Ultra Rare", "Amazing Rare", "Radiant Rare",
+      "Illustration Rare", "Special Illustration Rare", "MEGA_ATTACK_RARE", "Mega Attack Rare",
+      "Mega Hyper Rare", "Trainer Gallery Rare Holo", "Shiny Rare", "Shiny Ultra Rare",
+      "ACE SPEC Rare", "Black White Rare", "Rare Secret", "Secret Rare", "Rare Rainbow", "Hyper Rare"
+    ];
+
+    if (!setId) {
+      document.getElementById('cards-container').innerHTML = '<div class="state-msg error">No set specified.</div>';
+      throw new Error('missing set id');
+    }
+
+    // ---------- Per-set page theme: bloom background + brand dot color ----------
+
+    // Deterministic fallback color, derived from the set id, used whenever
+    // the dominant-color extraction below isn't possible (missing image,
+    // CORS-tainted canvas, etc). Guarantees every set still gets a stable,
+    // unique-ish theme rather than falling back to a flat default.
+    function hashHue(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return Math.abs(hash) % 360;
+    }
+
+    function rgbToHsl(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h = 0, s = 0;
+      const l = (max + min) / 2;
+      const d = max - min;
+      if (d !== 0) {
+        s = d / (1 - Math.abs(2 * l - 1));
+        switch (max) {
+          case r: h = ((g - b) / d) % 6; break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
+        }
+        h = Math.round(h * 60);
+        if (h < 0) h += 360;
+      }
+      return { h, s: Math.round(s * 100), l: Math.round(l * 100) };
+    }
+
+    const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+
+    // Places up to 4 patches — one per dominant color actually found in
+    // the card artwork — via the shared renderBloomLayer() in app.js.
+    // Also sets --dot-color, so the brand dot picks up the primary tone
+    // (this page is the one exception to the fixed per-section dot
+    // colors: it always follows the card).
+    function applyPageTheme(palette) {
+      const primary = palette[0];
+      const dotColor = `hsl(${primary.h}, ${clamp(primary.s + 10, 0, 100)}%, ${clamp(primary.l + 8, 25, 78)}%)`;
+      document.documentElement.style.setProperty('--dot-color', dotColor);
+      renderBloomLayer(palette);
+    }
+
+    // Reads the card image into a small canvas and builds a simple color
+    // histogram (RGB values bucketed into coarse "buckets" of 24) so we
+    // can pick the 3-4 most frequent, visually distinct colors — instead
+    // of a single flat average, which tends to muddy multi-color
+    // artwork into one grayish-purple blob. Rejects if the image is
+    // missing, fails to load, or the canvas gets tainted by a
+    // cross-origin image without CORS headers.
+    function extractPalette(imgUrl, count = 4) {
+      return new Promise((resolve, reject) => {
+        if (!imgUrl) { reject(new Error('no image')); return; }
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            const size = 50;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, size, size);
+            const data = ctx.getImageData(0, 0, size, size).data;
+
+            const bucketSize = 24;
+            const buckets = new Map();
+            for (let i = 0; i < data.length; i += 4) {
+              const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+              if (a < 200) continue;
+              // Skip near-white/near-black pixels: usually the card
+              // border or a flat background, not the artwork itself.
+              const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+              if (luminance > 245 || luminance < 12) continue;
+
+              const key = `${Math.round(r / bucketSize)}-${Math.round(g / bucketSize)}-${Math.round(b / bucketSize)}`;
+              const bucket = buckets.get(key) || { r: 0, g: 0, b: 0, count: 0 };
+              bucket.r += r; bucket.g += g; bucket.b += b; bucket.count++;
+              buckets.set(key, bucket);
+            }
+            if (!buckets.size) { reject(new Error('no usable pixels')); return; }
+
+            const sorted = [...buckets.values()].sort((a, b) => b.count - a.count);
+            const palette = [];
+            for (const bucket of sorted) {
+              const color = rgbToHsl(
+                Math.round(bucket.r / bucket.count),
+                Math.round(bucket.g / bucket.count),
+                Math.round(bucket.b / bucket.count)
+              );
+              // Skip colors too close to one already picked, so the
+              // palette reads as genuinely varied rather than 4 shades
+              // of the same tone.
+              const tooClose = palette.some(p => Math.abs(p.h - color.h) < 18 && Math.abs(p.l - color.l) < 12);
+              if (!tooClose) palette.push(color);
+              if (palette.length >= count) break;
+            }
+            if (!palette.length) { reject(new Error('no distinct colors')); return; }
+            resolve(palette);
+          } catch (e) {
+            reject(e); // canvas tainted by CORS
+          }
+        };
+        img.onerror = () => reject(new Error('image failed to load'));
+        img.src = imgUrl;
+      });
+    }
+
+    async function setPageThemeFromCards(cards) {
+      const fallbackHue = hashHue(setId);
+      const fallbackPalette = [
+        { h: fallbackHue, s: 65, l: 55 },
+        { h: (fallbackHue + 25) % 360, s: 60, l: 45 },
+        { h: (fallbackHue - 20 + 360) % 360, s: 55, l: 62 },
+      ];
+      if (!cards || !cards.length) { applyPageTheme(fallbackPalette); return; }
+
+      const priciest = [...cards].sort((a, b) => (b.price_market ?? -1) - (a.price_market ?? -1))[0];
+      const imgUrl = priciest && (priciest.image_large || priciest.image_small);
+
+      try {
+        const palette = await extractPalette(imgUrl, 4);
+        applyPageTheme(palette);
+      } catch (e) {
+        applyPageTheme(fallbackPalette);
+      }
+    }
+
+    function renderFilters(rarities) {
+      const el = document.getElementById('filters');
+      el.innerHTML = '';
+      const allChip = document.createElement('div');
+      allChip.className = 'chip' + (activeRarity === null ? ' active' : '');
+      allChip.textContent = 'All';
+      allChip.onclick = () => { activeRarity = null; renderFilters(rarities); renderCards(); };
+      el.appendChild(allChip);
+
+      rarities.forEach((r) => {
+        const chip = document.createElement('div');
+        chip.className = 'chip' + (activeRarity === r ? ' active' : '');
+        chip.textContent = r;
+        chip.onclick = () => { activeRarity = r; renderFilters(rarities); renderCards(); };
+        el.appendChild(chip);
+      });
+    }
+
+    function sortCards(cardsArray, criteria) {
+      return [...cardsArray].sort((a, b) => {
+        if (criteria === 'price_desc') {
+          return (b.price_market ?? -1) - (a.price_market ?? -1);
+        }
+        if (criteria === 'price_asc') {
+          return (a.price_market ?? Infinity) - (b.price_market ?? Infinity);
+        }
+        if (criteria === 'rarity_desc') {
+          let idxA = RARITY_ORDER.findIndex(r => r.toLowerCase() === (a.rarity || "").toLowerCase());
+          let idxB = RARITY_ORDER.findIndex(r => r.toLowerCase() === (b.rarity || "").toLowerCase());
+          return idxB - idxA;
+        }
+        if (criteria === 'rarity_asc') {
+          let idxA = RARITY_ORDER.findIndex(r => r.toLowerCase() === (a.rarity || "").toLowerCase());
+          let idxB = RARITY_ORDER.findIndex(r => r.toLowerCase() === (b.rarity || "").toLowerCase());
+          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+        }
+        return 0;
+      });
+    }
+
+    function renderCards() {
+      const container = document.getElementById('cards-container');
+      let filtered = activeRarity ? allCards.filter((c) => c.rarity === activeRarity) : allCards;
+
+      if (!filtered.length) {
+        container.innerHTML = '<div class="state-msg">No cards found for this filter.</div>';
+        return;
+      }
+
+      const currentCriteria = document.getElementById('sort-select').value;
+      filtered = sortCards(filtered, currentCriteria);
+
+      const grid = document.createElement('div');
+      grid.className = 'cards-grid';
+      filtered.forEach((c) => {
+        const priceLabel = formatPrice(c.price_market, c.currency);
+        const tile = document.createElement('div');
+        tile.className = 'card-tile';
+        const bigImgUrl = c.image_large || c.image_small || '';
+        tile.onclick = () => openModal(bigImgUrl);
+
+        tile.innerHTML = `
+          <button class="collect-btn ${c.is_owned ? 'owned' : ''}" onclick="event.stopPropagation(); toggleOwn('${c.id}', this)">★</button>
+          <button class="wish-btn ${c.is_wished ? 'wished' : ''}" onclick="event.stopPropagation(); toggleWish('${c.id}', this)">❤️</button>
+          <img src="${escapeHtml(c.image_large || c.image_small || '')}" alt="${escapeHtml(c.name)}" loading="lazy" onerror="this.src='${escapeHtml(c.image_small || '')}'">
+          <div class="price-tag ${priceLabel ? '' : 'no-price'}">${priceLabel || 'n/a'}</div>
+          <div class="card-info">
+            <div class="card-name">${escapeHtml(c.name)}${c.card_number ? ' · #' + escapeHtml(c.card_number) : ''}</div>
+            <div class="card-rarity">${escapeHtml(c.rarity || 'Unknown rarity')}</div>
+          </div>
+        `;
+        grid.appendChild(tile);
+      });
+      container.innerHTML = '';
+      container.appendChild(grid);
+    }
+
+    function openModal(imgUrl) {
+      if (!imgUrl) return;
+      document.getElementById('card-modal').style.display = "flex";
+      document.getElementById('modal-img').src = imgUrl;
+    }
+    function closeModal() { document.getElementById('card-modal').style.display = "none"; }
+
+    function applyData(data) {
+      if (data.set) {
+        document.getElementById('set-name').textContent = data.set.name;
+        document.getElementById('set-series').textContent = [data.set.series, data.set.release_date].filter(Boolean).join(' · ');
+      }
+      allCards = data.cards;
+      const sortedRarities = (data.available_rarities || []).sort((a, b) => {
+        let indexA = RARITY_ORDER.findIndex(r => r.toLowerCase() === a.toLowerCase());
+        let indexB = RARITY_ORDER.findIndex(r => r.toLowerCase() === b.toLowerCase());
+        if (indexA === -1) indexA = 99;
+        if (indexB === -1) indexB = 99;
+        return indexA - indexB;
+      });
+      renderFilters(sortedRarities);
+      renderCards();
+      setPageThemeFromCards(allCards);
+    }
+
+    async function loadCards() {
+      const container = document.getElementById('cards-container');
+      try {
+        const data = await api(`/api/sets/${encodeURIComponent(setId)}/cards`);
+        applyData(data);
+      } catch (err) { container.innerHTML = `<div class="state-msg error">Error: ${err.message}</div>`; }
+    }
+
+    document.getElementById('sort-select').addEventListener('change', renderCards);
+
+    document.getElementById('about-btn').addEventListener('click', showAboutModal);
+
+    async function toggleOwn(cardId, btn) {
+      try {
+        const res = await api('/api/collection/toggle', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ card_id: cardId })
+        });
+        if (res.is_owned) btn.classList.add('owned'); else btn.classList.remove('owned');
+        const card = allCards.find(c => c.id === cardId);
+        if (card) card.is_owned = res.is_owned;
+      } catch (err) { alert(err.message); }
+    }
+
+    async function toggleWish(cardId, btn) {
+      try {
+        const res = await api('/api/wishlist/toggle', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ card_id: cardId })
+        });
+        if (res.is_wished) btn.classList.add('wished'); else btn.classList.remove('wished');
+        const card = allCards.find(c => c.id === cardId);
+        if (card) card.is_wished = res.is_wished;
+      } catch (err) { alert(err.message); }
+    }
+
+    requireAuth().then(user => { if (user) loadCards(); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokyudex — Wishlist</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>:root { --dot-color: #a855f7; }</style>
+  <style>
+    .stats-panel { display: flex; gap: 20px; flex-wrap: wrap; margin: 20px 0; }
+    .stat-card { background: var(--panel); border: 1px solid var(--border); padding: 16px 24px; border-radius: var(--radius); flex: 1; min-width: 200px; }
+    .stat-val { font-family: 'JetBrains Mono', monospace; font-size: 24px; color: var(--danger); font-weight: 700; margin-top: 4px; }
+    .controls-row { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="side-menu-trigger">
+        <button class="hamburger-btn" aria-label="Menu">☰</button>
+        <div class="side-menu-panel">
+          <a href="binder.html" class="side-menu-link">📁 Binders</a>
+          <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
+          <a href="collezione.html" class="side-menu-link">★ My Collection</a>
+        </div>
+      </div>
+      <a href="index.html" class="icon-btn" aria-label="Home" title="Home">🏠</a>
+      <a href="index.html" class="brand"><span class="dot"></span> Pokyudex</a>
+    </div>
+    <div class="topbar-right">
+      <span id="current-username" class="user-badge"></span>
+      <button class="btn" onclick="logoutUser()">Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="eyebrow">Your Budget</div>
+    <h1>Wishlist</h1>
+
+    <div class="stats-panel">
+      <div class="stat-card">
+        <div class="eyebrow" style="margin:0;">Wanted Cards</div>
+        <div class="stat-val" id="total-cards" style="color: var(--teal);">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="eyebrow" style="margin:0;">Estimated Cost (EUR)</div>
+        <div class="stat-val" id="total-val-eur">0.00 €</div>
+      </div>
+      <div class="stat-card">
+        <div class="eyebrow" style="margin:0;">Estimated Cost (USD)</div>
+        <div class="stat-val" id="total-val-usd">$0.00</div>
+      </div>
+    </div>
+
+    <div class="controls-row">
+      <select id="sort-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 240px; height: 41px; padding: 0 14px;">
+        <option value="price_desc">Price: highest first</option>
+        <option value="price_asc">Price: lowest first</option>
+        <option value="rarity_desc">Rarity: rarest first</option>
+        <option value="rarity_asc">Rarity: least rare first</option>
+        <option value="date_desc">Release date: newest first</option>
+        <option value="date_asc">Release date: oldest first</option>
+      </select>
+    </div>
+
+    <div id="wishlist-container">
+      <div class="state-msg"><span class="spinner"></span>Opening your wishlist...</div>
+    </div>
+  </div>
+
+  <div id="card-modal" class="modal" onclick="closeModal()">
+    <span class="modal-close">&times;</span>
+    <img class="modal-content" id="modal-img" src="" alt="Zoom" />
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    // Violet palette matching the wishlist page's fixed brand dot.
+    renderBloomLayer([
+      { h: 271, s: 78, l: 62 },
+      { h: 300, s: 68, l: 60 },
+      { h: 250, s: 62, l: 55 },
+    ]);
+
+    let wishlist = [];
+
+    const RARITY_ORDER = [
+      "Common", "Uncommon", "Promo", "Classic Collection", "Rare", "Rare Holo", "Rare BREAK",
+      "Rare Holo EX", "Rare Holo GX", "Rare Holo LV.X", "Rare Holo V", "Rare Holo VMAX",
+      "Rare Holo VSTAR", "Double Rare", "Ultra Rare", "Amazing Rare", "Radiant Rare",
+      "Illustration Rare", "Special Illustration Rare", "MEGA_ATTACK_RARE", "Mega Attack Rare",
+      "Mega Hyper Rare", "Trainer Gallery Rare Holo", "Shiny Rare", "Shiny Ultra Rare",
+      "ACE SPEC Rare", "Black White Rare", "Rare Secret", "Secret Rare", "Rare Rainbow", "Hyper Rare"
+    ];
+
+    function calculateStats(cards) {
+      document.getElementById('total-cards').textContent = cards.length;
+      let eur = 0, usd = 0;
+      cards.forEach(c => {
+        if (c.price_market) {
+          if (c.currency === 'EUR') eur += c.price_market;
+          else if (c.currency === 'USD') usd += c.price_market;
+        }
+      });
+      document.getElementById('total-val-eur').textContent = eur.toFixed(2) + ' €';
+      document.getElementById('total-val-usd').textContent = '$' + usd.toFixed(2);
+    }
+
+    function sortCards(cardsArray, criteria) {
+      return [...cardsArray].sort((a, b) => {
+        if (criteria === 'price_desc') {
+          return (b.price_market ?? -1) - (a.price_market ?? -1);
+        }
+        if (criteria === 'price_asc') {
+          return (a.price_market ?? Infinity) - (b.price_market ?? Infinity);
+        }
+        if (criteria === 'rarity_desc') {
+          let idxA = RARITY_ORDER.findIndex(r => r.toLowerCase() === (a.rarity || "").toLowerCase());
+          let idxB = RARITY_ORDER.findIndex(r => r.toLowerCase() === (b.rarity || "").toLowerCase());
+          return idxB - idxA;
+        }
+        if (criteria === 'rarity_asc') {
+          let idxA = RARITY_ORDER.findIndex(r => r.toLowerCase() === (a.rarity || "").toLowerCase());
+          let idxB = RARITY_ORDER.findIndex(r => r.toLowerCase() === (b.rarity || "").toLowerCase());
+          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+        }
+        if (criteria === 'date_desc') {
+          return (b.release_date || "").localeCompare(a.release_date || "");
+        }
+        if (criteria === 'date_asc') {
+          return (a.release_date || "").localeCompare(b.release_date || "");
+        }
+        return 0;
+      });
+    }
+
+    function renderWishlist() {
+      const container = document.getElementById('wishlist-container');
+      if (!wishlist.length) {
+        container.innerHTML = '<div class="state-msg">No cards in your wishlist.</div>';
+        return;
+      }
+
+      const currentCriteria = document.getElementById('sort-select').value;
+      const sorted = sortCards(wishlist, currentCriteria);
+
+      const grid = document.createElement('div');
+      grid.className = 'cards-grid';
+      sorted.forEach((c) => {
+        const priceLabel = formatPrice(c.price_market, c.currency);
+        const tile = document.createElement('div');
+        tile.className = 'card-tile';
+        const bigImgUrl = c.image_large || c.image_small || '';
+        tile.onclick = () => openModal(bigImgUrl);
+
+        tile.innerHTML = `
+          <button class="wish-btn wished" onclick="event.stopPropagation(); removeCard('${c.id}')">❤️</button>
+          <img src="${escapeHtml(c.image_large || c.image_small || '')}" alt="${escapeHtml(c.name)}" loading="lazy" onerror="this.src='${escapeHtml(c.image_small || '')}'">
+          <div class="price-tag ${priceLabel ? '' : 'no-price'}">${priceLabel || 'n/a'}</div>
+          <div class="card-info">
+            <div class="card-name">${escapeHtml(c.name)}${c.card_number ? ' · #' + escapeHtml(c.card_number) : ''}</div>
+            <div class="card-rarity" style="color: var(--teal); font-weight:600; margin-bottom:2px;">${escapeHtml(c.set_name)}</div>
+            <div class="card-rarity">${escapeHtml(c.rarity || 'Unknown rarity')}</div>
+          </div>
+        `;
+        grid.appendChild(tile);
+      });
+      container.innerHTML = '';
+      container.appendChild(grid);
+    }
+
+    async function loadWishlist() {
+      try {
+        wishlist = await api('/api/wishlist');
+        calculateStats(wishlist);
+        renderWishlist();
+      } catch (err) {
+        document.getElementById('wishlist-container').innerHTML = `<div class="state-msg error">Error: ${err.message}</div>`;
+      }
+    }
+
+    async function removeCard(cardId) {
+      try {
+        await api('/api/wishlist/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card_id: cardId })
+        });
+        wishlist = wishlist.filter(c => c.id !== cardId);
+        calculateStats(wishlist);
+        renderWishlist();
+      } catch (err) { alert(err.message); }
+    }
+
+    document.getElementById('sort-select').addEventListener('change', renderWishlist);
+
+    function openModal(imgUrl) {
+      if (!imgUrl) return;
+      document.getElementById('card-modal').style.display = "flex";
+      document.getElementById('modal-img').src = imgUrl;
+    }
+    function closeModal() { document.getElementById('card-modal').style.display = "none"; }
+
+    requireAuth().then(user => { if (user) loadWishlist(); });
+  </script>
+</body>
+</html>

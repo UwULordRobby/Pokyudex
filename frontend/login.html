@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokyudex — Sign In</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .auth-wrapper {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .auth-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 380px;
+    }
+    .auth-brand {
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700;
+      font-size: 26px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+    .auth-field { margin-bottom: 16px; }
+    .auth-field label {
+      display: block;
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .auth-field input {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+    }
+    .auth-field input:focus { outline: none; border-color: var(--teal); }
+    .auth-submit { width: 100%; margin-top: 6px; height: 42px; }
+    .auth-switch {
+      text-align: center;
+      margin-top: 18px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .auth-switch a { color: var(--teal); cursor: pointer; }
+    .auth-error {
+      background: rgba(224, 101, 101, 0.12);
+      border: 1px solid var(--danger);
+      color: var(--danger);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-brand"><span class="dot"></span> Pokyudex</div>
+
+      <div id="auth-error" class="auth-error"></div>
+
+      <form id="auth-form">
+        <div class="auth-field">
+          <label>Email</label>
+          <input type="email" id="auth-email" required autocomplete="email" />
+        </div>
+        <div class="auth-field" id="username-field" style="display:none;">
+          <label>Username</label>
+          <input type="text" id="auth-username" autocomplete="username" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]+" />
+          <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">
+            3-20 characters: letters, numbers, or underscore. This is what others will see instead of your email.
+          </div>
+        </div>
+        <div class="auth-field">
+          <label>Password</label>
+          <input type="password" id="auth-password" required autocomplete="current-password" minlength="8" />
+          <div id="password-hint" style="display:none; font-size:11px; color:var(--text-muted); margin-top:6px;">
+            At least 8 characters, with one letter and one number.
+          </div>
+        </div>
+        <div class="auth-field" id="confirm-password-field" style="display:none;">
+          <label>Confirm Password</label>
+          <input type="password" id="auth-password-confirm" autocomplete="new-password" minlength="8" />
+        </div>
+        <button type="submit" class="btn btn-accent auth-submit" id="auth-submit-btn">Sign In</button>
+      </form>
+
+      <div class="auth-switch">
+        <span id="auth-switch-text">Don't have an account yet?</span>
+        <a id="auth-switch-link">Create one</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let mode = 'login'; // 'login' | 'register'
+
+    const form = document.getElementById('auth-form');
+    const errorBox = document.getElementById('auth-error');
+    const submitBtn = document.getElementById('auth-submit-btn');
+    const switchText = document.getElementById('auth-switch-text');
+    const switchLink = document.getElementById('auth-switch-link');
+    const passwordInput = document.getElementById('auth-password');
+    const confirmField = document.getElementById('confirm-password-field');
+    const confirmInput = document.getElementById('auth-password-confirm');
+    const passwordHint = document.getElementById('password-hint');
+    const usernameField = document.getElementById('username-field');
+    const usernameInput = document.getElementById('auth-username');
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.style.display = 'block';
+    }
+    function hideError() {
+      errorBox.style.display = 'none';
+    }
+
+    function setMode(newMode) {
+      mode = newMode;
+      hideError();
+      if (mode === 'login') {
+        submitBtn.textContent = 'Sign In';
+        switchText.textContent = "Don't have an account yet?";
+        switchLink.textContent = 'Create one';
+        passwordInput.setAttribute('autocomplete', 'current-password');
+        confirmField.style.display = 'none';
+        confirmInput.required = false;
+        passwordHint.style.display = 'none';
+        usernameField.style.display = 'none';
+        usernameInput.required = false;
+      } else {
+        submitBtn.textContent = 'Create Account';
+        switchText.textContent = 'Already have an account?';
+        switchLink.textContent = 'Sign in';
+        passwordInput.setAttribute('autocomplete', 'new-password');
+        confirmField.style.display = 'block';
+        confirmInput.required = true;
+        passwordHint.style.display = 'block';
+        usernameField.style.display = 'block';
+        usernameInput.required = true;
+      }
+    }
+
+    switchLink.addEventListener('click', () => {
+      setMode(mode === 'login' ? 'register' : 'login');
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError();
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value;
+      const username = usernameInput.value.trim();
+
+      if (mode === 'register') {
+        if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
+          showError('Username must be 3-20 characters: letters, numbers, or underscore.');
+          return;
+        }
+        if (password !== confirmInput.value) {
+          showError('Passwords do not match.');
+          return;
+        }
+        if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+          showError('Password must contain at least one letter and one number.');
+          return;
+        }
+      }
+
+      submitBtn.disabled = true;
+      try {
+        const endpoint = mode === 'login' ? '/api/login' : '/api/register';
+        const body = mode === 'login' ? { email, password } : { email, username, password };
+        await api(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        window.location.href = 'index.html';
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    // If already logged in, skip straight to the home page.
+    (async () => {
+      try {
+        const data = await api('/api/me');
+        if (data.user) window.location.href = 'index.html';
+      } catch (err) { /* not logged in, stay here */ }
+    })();
+  </script>
+</body>
+</html>

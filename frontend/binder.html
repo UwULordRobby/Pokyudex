@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokyudex — Binders</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>:root { --dot-color: #4f8bf9; }</style>
+  <style>
+    .binder-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 14px; }
+    .creator-panel { background: var(--panel); border: 1px solid var(--border); padding: 20px; border-radius: var(--radius); margin-bottom: 30px; }
+    .form-group { display: inline-flex; flex-direction: column; margin-right: 14px; margin-bottom: 10px; }
+    .form-group label { font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--text-muted); margin-bottom: 4px; }
+    .form-group input, .form-group select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; }
+    .binder-tab-container { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    .search-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10,9,14,0.95); z-index: 1100; padding: 40px; overflow-y: auto; }
+    
+    /* ADAPTIVE STRUCTURE FOR THE BINDER COVER */
+    .binder-book-spread {
+      display: flex;
+      flex-wrap: nowrap; /* Prevents the right page from wrapping below */
+      align-items: stretch;
+      padding: 24px;
+      border-radius: 20px;
+      margin: 24px auto;
+      width: max-content; /* Forces the cover to expand based on the chosen columns */
+      max-width: 100%; /* 100% is now the REAL screen width (thanks to the full-width wrapper), not the narrow .container width */
+      overflow-x: auto; /* Safety net: only kicks in for extreme configurations that don't fit even at full screen */
+      position: relative;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    /* The binder "escapes" the central .container to use the full screen width,
+       without touching the cards: the pages grow, not the card sizes. */
+    #binder-view-wrapper {
+      width: 100vw;
+      position: relative;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 0 24px;
+    }
+    
+    .binder-page-side { display: flex; flex-direction: column; flex-shrink: 0; }
+    .binder-spine {
+      width: 24px;
+      margin: 0 12px;
+      flex-shrink: 0;
+      background: linear-gradient(to right, rgba(0,0,0,0.55), rgba(255,255,255,0.03) 30%, rgba(255,255,255,0.03) 70%, rgba(0,0,0,0.55));
+      border-left: 1px solid rgba(255,255,255,0.02);
+      border-right: 1px solid rgba(255,255,255,0.02);
+      box-shadow: inset 0 0 12px rgba(0,0,0,0.9);
+      border-radius: 4px;
+    }
+    .page-title-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #ffffff;
+      text-align: center;
+      margin-bottom: 10px;
+      background: rgba(6, 5, 9, 0.88);
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    }
+
+    .slot-remove-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(20, 18, 26, 0.85);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 6px;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      cursor: pointer;
+      z-index: 10;
+      transition: all 0.15s ease;
+    }
+    .slot-remove-btn:hover {
+      background: var(--danger);
+      color: #fff;
+      border-color: var(--danger);
+      transform: scale(1.05);
+    }
+
+    .binder-slot-blank {
+      cursor: default;
+      background: rgba(0,0,0,0.15);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    .binder-slot-blank:hover { transform: none; box-shadow: none; }
+
+    .binder-slot[draggable="true"]:active { cursor: grabbing; }
+    .binder-slot[draggable="true"]:hover img { filter: brightness(1.08); }
+    .binder-slot img { transition: filter 0.15s ease; }
+
+    /* --- "Card zoom" modal --- */
+    #card-modal {
+      z-index: 2000;
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+    #card-modal.active { display: flex; }
+    #card-modal .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 7, 12, 0.92);
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      cursor: zoom-out;
+    }
+    #card-modal.active .modal-backdrop { opacity: 1; }
+
+    .modal-card-frame {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: scale(0.85);
+      opacity: 0;
+      transition: transform 0.28s cubic-bezier(.2,.8,.2,1), opacity 0.22s ease;
+      max-width: 90vw;
+    }
+    #card-modal.active .modal-card-frame { transform: scale(1); opacity: 1; }
+
+    .modal-card-frame .modal-content {
+      max-height: 76vh;
+      max-width: 90vw;
+      border-radius: 16px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.8);
+      display: block;
+    }
+
+    .modal-card-info { text-align: center; margin-top: 16px; }
+    .modal-card-name {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .modal-card-price {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--gold);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: -18px;
+      right: -18px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--panel, #1c1a25);
+      border: 1px solid var(--border, #333);
+      color: var(--text, #fff);
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .modal-close:hover { background: var(--danger, #e5484d); color: #fff; border-color: var(--danger, #e5484d); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="side-menu-trigger">
+        <button class="hamburger-btn" aria-label="Menu">☰</button>
+        <div class="side-menu-panel">
+          <a href="binder.html" class="side-menu-link">📁 Binders</a>
+          <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
+          <a href="collezione.html" class="side-menu-link">★ My Collection</a>
+        </div>
+      </div>
+      <a href="index.html" class="icon-btn" aria-label="Home" title="Home">🏠</a>
+      <a href="index.html" class="brand"><span class="dot"></span> Pokyudex</a>
+    </div>
+    <div class="topbar-right">
+      <span id="current-username" class="user-badge"></span>
+      <button class="btn" onclick="logoutUser()">Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="eyebrow">Visual Display</div>
+    <h1>Your Binders</h1>
+
+    <div class="creator-panel">
+      <div class="eyebrow" style="color: var(--gold)">New Project</div>
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end;">
+        <div class="form-group">
+          <label>Binder Name</label>
+          <input type="text" id="b-name" placeholder="E.g. Base Set 1999, Shiny, ex..." />
+        </div>
+        <div class="form-group">
+          <label>Layout Type</label>
+          <select id="b-type" onchange="document.getElementById('size-selectors').style.display = this.value==='pokedex'?'none':'inline-flex'">
+            <option value="custom">Custom Binder</option>
+            <option value="pokedex">Master National Pokédex (1025 slots)</option>
+          </select>
+        </div>
+        <div id="size-selectors" style="display: inline-flex;">
+          <div class="form-group">
+            <label>Rows</label>
+            <input type="number" id="b-rows" value="3" min="1" max="5" style="width: 70px;" />
+          </div>
+          <div class="form-group">
+            <label>Columns</label>
+            <input type="number" id="b-cols" value="3" min="1" max="5" style="width: 70px;" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Cover Color</label>
+          <input type="color" id="b-color" value="#1c1a25" style="width: 70px; padding:2px; height:37px;" />
+        </div>
+        <button class="btn btn-accent" onclick="createNewBinder()" style="height: 37px; margin-bottom: 10px;">Create Album</button>
+      </div>
+    </div>
+
+    <div class="binder-tab-container" id="binder-tabs"></div>
+
+    <hr style="border-color: var(--border); margin: 30px 0;">
+
+    <div id="active-binder-view" style="display: none;">
+      <div class="binder-header">
+        <div>
+          <h2 id="active-title" style="margin:0; font-family:'Rajdhani'; font-size:30px; display:inline-block;"></h2>
+          <div id="active-meta" class="eyebrow" style="margin-top:4px;"></div>
+        </div>
+        
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <div class="chip active" id="view-single-btn" style="margin:0;">Single Page</div>
+          <div class="chip" id="view-book-btn" style="margin:0;">Book View (2 Pages)</div>
+        </div>
+
+        <div>
+          <button class="btn" id="nav-prev">&larr; Previous</button>
+          <span id="page-indicator" style="font-family:'JetBrains Mono'; font-size:14px; margin:0 12px; color: var(--gold); font-weight:700;">Page 1</span>
+          <button class="btn" id="nav-next">Next &rarr;</button>
+          <button class="btn" style="border-color:var(--danger); color:var(--danger); margin-left:20px;" onclick="deleteCurrentBinder()">Delete Binder</button>
+        </div>
+      </div>
+
+      <div id="binder-view-wrapper"></div>
+    </div>
+  </div>
+
+  <div id="search-overlay" class="search-overlay">
+    <div style="max-width: 1200px; margin: 0 auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2>Select the card to place in Slot <span id="target-slot-title"></span></h2>
+        <button class="btn" onclick="closeSearchOverlay()">Close</button>
+      </div>
+      <input type="text" class="search-bar" id="modal-card-search" placeholder="Type the Pokémon name..." style="max-width:100%; margin-bottom:30px;" />
+      <div id="modal-results-container"></div>
+    </div>
+  </div>
+
+  <div id="card-modal" class="modal">
+    <div class="modal-backdrop" onclick="closeModal()"></div>
+    <div class="modal-card-frame">
+      <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
+      <img class="modal-content" id="modal-img" src="" alt="Enlarged card" />
+      <div class="modal-card-info">
+        <div class="modal-card-name" id="modal-card-name"></div>
+        <div class="modal-card-price" id="modal-card-price"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    // Blue palette matching the binders page's fixed brand dot.
+    renderBloomLayer([
+      { h: 217, s: 78, l: 62 },
+      { h: 195, s: 70, l: 60 },
+      { h: 240, s: 62, l: 50 },
+    ]);
+
+    let binders = [];
+    let currentBinderId = null;
+    let currentBinderData = null;
+    let currentPage = 1; 
+    let viewMode = 'single'; 
+    let targetSlotNumber = null;
+
+    const viewSingleBtn = document.getElementById('view-single-btn');
+    const viewBookBtn = document.getElementById('view-book-btn');
+
+    viewSingleBtn.addEventListener('click', () => {
+      viewSingleBtn.className = 'chip active';
+      viewBookBtn.className = 'chip';
+      viewMode = 'single';
+      renderActiveGrid();
+    });
+
+    viewBookBtn.addEventListener('click', () => {
+      viewBookBtn.className = 'chip active';
+      viewSingleBtn.className = 'chip';
+      viewMode = 'book';
+      // Page 1 is always shown alone (like a cover). Every other spread
+      // pairs an even page with the following odd one (2-3, 4-5, ...),
+      // so any odd page beyond 1 needs to snap back to its even partner.
+      if (currentPage > 1 && currentPage % 2 !== 0) { currentPage--; }
+      renderActiveGrid();
+    });
+
+    async function loadBinders() {
+      binders = await api('/api/binders');
+      const tabs = document.getElementById('binder-tabs');
+      tabs.innerHTML = '';
+      
+      binders.forEach(b => {
+        const btn = document.createElement('button');
+        btn.className = 'chip' + (currentBinderId === b.id ? ' active' : '');
+        btn.style.borderLeft = `6px solid ${b.color}`;
+        btn.textContent = b.name;
+        btn.onclick = () => { selectBinder(b.id); };
+        tabs.appendChild(btn);
+      });
+
+      if(binders.length && !currentBinderId) {
+        selectBinder(binders[0].id);
+      }
+    }
+
+    async function createNewBinder() {
+      const name = document.getElementById('b-name').value.trim() || "New Binder";
+      const type = document.getElementById('b-type').value;
+      const color = document.getElementById('b-color').value;
+      const rows = type === 'pokedex' ? 3 : document.getElementById('b-rows').value;
+      const cols = type === 'pokedex' ? 3 : document.getElementById('b-cols').value;
+
+      await api('/api/binders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, color, rows, cols, type })
+      });
+      document.getElementById('b-name').value = '';
+      loadBinders();
+    }
+
+    async function selectBinder(id, preservePage = false) {
+      currentBinderId = id;
+      if (!preservePage) { currentPage = 1; }
+      loadBinders();
+      
+      currentBinderData = await api(`/api/binders/${id}`);
+      document.getElementById('active-binder-view').style.display = 'block';
+      document.getElementById('active-title').textContent = currentBinderData.binder.name;
+      document.getElementById('active-title').style.borderBottom = `3px solid ${currentBinderData.binder.color}`;
+      
+      if(currentBinderData.binder.type === 'pokedex') {
+        document.getElementById('active-meta').textContent = "National Master Collection — 1025 Total Slots (3x3 Pages)";
+      } else {
+        document.getElementById('active-meta').textContent = `Page Grid Format: ${currentBinderData.binder.rows}x${currentBinderData.binder.cols}`;
+      }
+      renderActiveGrid();
+    }
+
+    function handleDragStart(e) {
+      if (e.target.closest('.overlay-btn') || e.target.closest('.slot-remove-btn')) {
+        e.preventDefault();
+        return false;
+      }
+      e.dataTransfer.effectAllowed = 'move';
+      const slotNum = e.currentTarget.dataset.slot;
+      e.dataTransfer.setData('text/plain', slotNum);
+      window.draggedSourceSlotNum = parseInt(slotNum); 
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      e.currentTarget.style.borderColor = 'var(--gold)';
+      e.currentTarget.style.boxShadow = '0 0 15px rgba(240, 185, 61, 0.4)';
+    }
+
+    function handleDragLeave(e) {
+      e.currentTarget.style.borderColor = '';
+      e.currentTarget.style.boxShadow = '';
+    }
+
+    async function handleDrop(e) {
+      e.preventDefault();
+      e.currentTarget.style.borderColor = '';
+      e.currentTarget.style.boxShadow = '';
+      
+      let sourceSlotNum = parseInt(e.dataTransfer.getData('text/plain'));
+      if (isNaN(sourceSlotNum) && window.draggedSourceSlotNum !== undefined) {
+        sourceSlotNum = window.draggedSourceSlotNum;
+      }
+      
+      const targetSlotNum = parseInt(e.currentTarget.dataset.slot);
+      if (!sourceSlotNum || sourceSlotNum === targetSlotNum) return;
+
+      const sourceCard = currentBinderData.slots[sourceSlotNum];
+      const targetCard = currentBinderData.slots[targetSlotNum];
+
+      const sourceCardId = sourceCard ? sourceCard.card_id : null;
+      const targetCardId = targetCard ? targetCard.card_id : null;
+
+      if (!sourceCardId && !targetCardId) return;
+
+      try {
+        if (targetCardId) {
+          currentBinderData.slots[sourceSlotNum] = { ...targetCard, slot_number: sourceSlotNum };
+        } else {
+          delete currentBinderData.slots[sourceSlotNum];
+        }
+
+        if (sourceCardId) {
+          currentBinderData.slots[targetSlotNum] = { ...sourceCard, slot_number: targetSlotNum };
+        } else {
+          delete currentBinderData.slots[targetSlotNum];
+        }
+
+        renderActiveGrid();
+
+        await Promise.all([
+          api(`/api/binders/${currentBinderId}/slots`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slot_number: sourceSlotNum, card_id: targetCardId })
+          }),
+          api(`/api/binders/${currentBinderId}/slots`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slot_number: targetSlotNum, card_id: sourceCardId })
+          })
+        ]);
+      } catch (err) {
+        alert("Unable to complete the move: " + err.message);
+        selectBinder(currentBinderId, true);
+      }
+    }
+
+    async function execOverlaySearch() {
+      const q = document.getElementById('modal-card-search').value.trim();
+      const b = currentBinderData.binder;
+      const container = document.getElementById('modal-results-container');
+      
+      container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Searching the Pokédex...</div>';
+      
+      let url = `/api/cards/search?`;
+      if (b && b.type === 'pokedex') {
+        url += `pokedex_number=${targetSlotNumber}`;
+        if (q) url += `&name=${encodeURIComponent(q)}`;
+      } else {
+        if (q.length < 2) {
+          container.innerHTML = '<div class="state-msg">Type at least 2 letters to search...</div>';
+          return;
+        }
+        url += `name=${encodeURIComponent(q)}`;
+      }
+      
+      try {
+        const cards = await api(url);
+        container.innerHTML = '';
+        
+        if (!cards || cards.length === 0) {
+          container.innerHTML = '<div class="state-msg">No cards found. Try a different name or wait for sync.</div>';
+          return;
+        }
+
+        const grid = document.createElement('div');
+        grid.className = 'cards-grid';
+        
+        const safePrice = (p, curr) => {
+            try { return formatPrice(p, curr); } 
+            catch(e) { return p ? `${p} ${curr||''}` : 'n/a'; }
+        };
+
+        cards.forEach(c => {
+          const tile = document.createElement('div');
+          tile.className = 'card-tile';
+          tile.onclick = () => { assignCardToSlot(c.id); };
+          
+          const priceLabel = safePrice(c.price_market, c.currency);
+
+          tile.innerHTML = `
+            <img src="${escapeHtml(c.image_small)}" alt="${escapeHtml(c.name)}" loading="lazy">
+            <div class="card-info">
+              <div class="card-name">${escapeHtml(c.name)} (${escapeHtml(c.card_number)})</div>
+              <div class="card-rarity">${escapeHtml(c.rarity || 'Rarity n/a')}</div>
+              <div class="card-rarity" style="color:var(--teal); text-transform:none;">${escapeHtml(c.set_name || 'Unknown set')}</div>
+              <div style="font-family:'JetBrains Mono'; font-size:10px; color:var(--gold); margin-top:4px;">${priceLabel}</div>
+            </div>
+          `;
+          grid.appendChild(tile);
+        });
+        container.appendChild(grid);
+      } catch (err) {
+        container.innerHTML = `<div class="state-msg error">Connection error: ${err.message}</div>`;
+      }
+    }
+
+    function openSearchOverlay(slotNum) {
+      targetSlotNumber = slotNum;
+      document.getElementById('target-slot-title').textContent = slotNum;
+      document.getElementById('search-overlay').style.display = 'block';
+      document.getElementById('modal-card-search').value = '';
+      document.getElementById('modal-results-container').innerHTML = '';
+      document.getElementById('modal-card-search').focus();
+      
+      const b = currentBinderData.binder;
+      if (b && b.type === 'pokedex') {
+        document.getElementById('modal-card-search').placeholder = `Showing only cards for Pokédex position #${slotNum}...`;
+        execOverlaySearch(); 
+      } else {
+        document.getElementById('modal-card-search').placeholder = "Type the Pokémon name (e.g. Charizard)...";
+      }
+    }
+
+    function closeSearchOverlay() { document.getElementById('search-overlay').style.display = 'none'; }
+
+    let searchDebounceTimer;
+    document.getElementById('modal-card-search').addEventListener('input', () => {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => { execOverlaySearch(); }, 300);
+    });
+
+    function createBlankPageHTML(slotsCount, b, isBookMode) {
+      const grid = document.createElement('div');
+      grid.className = 'binder-grid';
+      const slotWidth = isBookMode ? '170px' : '180px';
+      grid.style.margin = '0';
+      grid.style.gridTemplateColumns = `repeat(${b.cols}, ${slotWidth})`;
+      for (let i = 0; i < slotsCount; i++) {
+        const tile = document.createElement('div');
+        tile.className = 'binder-slot binder-slot-blank';
+        tile.style.width = slotWidth;
+        grid.appendChild(tile);
+      }
+      return grid;
+    }
+
+    function createGridHTML(startSlot, slotsCount, b, slots, isBookMode) {
+      const grid = document.createElement('div');
+      grid.className = 'binder-grid';
+      
+      const slotWidth = isBookMode ? '170px' : '180px';
+      grid.style.margin = isBookMode ? '0' : '24px auto';
+      grid.style.gridTemplateColumns = `repeat(${b.cols}, ${slotWidth})`;
+
+      for (let i = 0; i < slotsCount; i++) {
+        const slotNum = startSlot + i;
+        if (b && b.type === 'pokedex' && slotNum > 1025) break;
+
+        const tile = document.createElement('div');
+        tile.className = 'binder-slot';
+        tile.style.width = slotWidth;
+        tile.dataset.slot = slotNum;
+        
+        tile.addEventListener('dragover', handleDragOver);
+        tile.addEventListener('dragleave', handleDragLeave);
+        tile.addEventListener('drop', handleDrop);
+        
+        const cardData = slots[slotNum];
+        tile.innerHTML = `<div class="slot-number">#${slotNum}</div>`;
+        
+        if (cardData) {
+          tile.setAttribute('draggable', 'true');
+          tile.addEventListener('dragstart', handleDragStart);
+          
+          let startX = 0;
+          let startY = 0;
+          
+          tile.addEventListener('pointerdown', (e) => {
+            startX = e.clientX;
+            startY = e.clientY;
+          });
+          
+          tile.addEventListener('pointerup', (e) => {
+            if (e.target.closest('.slot-remove-btn')) return; 
+            
+            const diffX = Math.abs(e.clientX - startX);
+            const diffY = Math.abs(e.clientY - startY);
+            
+            if (diffX < 5 && diffY < 5) {
+              openModal(cardData);
+            }
+          });
+          
+          const priceLabel = formatPrice(cardData.price_market, cardData.currency);
+          tile.innerHTML += `
+            <button class="slot-remove-btn" onclick="event.stopPropagation(); clearSlot(${slotNum})">❌</button>
+            <img src="${escapeHtml(cardData.image_small)}" alt="${escapeHtml(cardData.name)}" draggable="false" style="pointer-events: none;">
+            <div class="price-tag" style="bottom:6px; right:6px; font-size:10px; padding:2px 5px; z-index:4; pointer-events: none;">${priceLabel || 'n/a'}</div>
+          `;
+        } else {
+          tile.removeAttribute('draggable');
+          tile.innerHTML += `<div style="color:var(--text-muted); font-size:24px; font-weight:bold;">+</div>`;
+          tile.onclick = () => { openSearchOverlay(slotNum); };
+        }
+        grid.appendChild(tile);
+      }
+      return grid;
+    }
+
+    function renderActiveGrid() {
+      const wrapper = document.getElementById('binder-view-wrapper');
+      const b = currentBinderData.binder;
+      const slots = currentBinderData.slots;
+      
+      const slotsPerPage = b.rows * b.cols;
+      wrapper.innerHTML = '';
+
+      // BACKGROUND GRADIENT COMBINATION FOR THE REACTIVE LEATHERETTE LOOK
+      const albumBackground = `linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0.55) 100%), ${b.color}`;
+      const albumBoxShadow = `0 35px 80px rgba(0, 0, 0, 0.85), inset 0 0 40px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04)`;
+      const albumBorder = `6px solid rgba(255, 255, 255, 0.08)`;
+
+      if (viewMode === 'single') {
+        const startSlot = ((currentPage - 1) * slotsPerPage) + 1;
+        document.getElementById('page-indicator').textContent = `Page ${currentPage} (Slots ${startSlot}-${b.type==='pokedex'?Math.min(startSlot+slotsPerPage-1, 1025):startSlot+slotsPerPage-1})`;
+        
+        const singleSpread = document.createElement('div');
+        singleSpread.className = 'binder-book-spread';
+        singleSpread.style.background = albumBackground;
+        singleSpread.style.boxShadow = albumBoxShadow;
+        singleSpread.style.border = albumBorder;
+        
+        const grid = createGridHTML(startSlot, slotsPerPage, b, slots, false);
+        singleSpread.appendChild(grid);
+        wrapper.appendChild(singleSpread);
+        
+      } else {
+        // Page 1 is always a solo "cover" page shown on the right.
+        // Every subsequent spread pairs an even page with the odd page
+        // right after it (2-3, 4-5, 6-7, ...).
+        const isCoverSpread = currentPage === 1;
+        const pageLeft = isCoverSpread ? null : currentPage;
+        const pageRight = isCoverSpread ? 1 : currentPage + 1;
+
+        const startSlotRight = ((pageRight - 1) * slotsPerPage) + 1;
+        const rightExists = b.type !== 'pokedex' || startSlotRight <= 1025;
+
+        document.getElementById('page-indicator').textContent = isCoverSpread
+          ? `Page 1 (Cover)`
+          : `Pages ${pageLeft}-${pageRight}`;
+
+        const bookSpread = document.createElement('div');
+        bookSpread.className = 'binder-book-spread';
+        bookSpread.style.background = albumBackground;
+        bookSpread.style.boxShadow = albumBoxShadow;
+        bookSpread.style.border = albumBorder;
+
+        if (isCoverSpread) {
+          const blankContainer = document.createElement('div');
+          blankContainer.className = 'binder-page-side';
+          const blankBadge = document.createElement('div');
+          blankBadge.className = 'page-title-badge';
+          blankBadge.textContent = 'INSIDE COVER';
+          blankContainer.appendChild(blankBadge);
+          blankContainer.appendChild(createBlankPageHTML(slotsPerPage, b, true));
+          bookSpread.appendChild(blankContainer);
+
+          const spine = document.createElement('div');
+          spine.className = 'binder-spine';
+          bookSpread.appendChild(spine);
+        } else {
+          const startSlotLeft = ((pageLeft - 1) * slotsPerPage) + 1;
+          const leftContainer = document.createElement('div');
+          leftContainer.className = 'binder-page-side';
+          const leftBadge = document.createElement('div');
+          leftBadge.className = 'page-title-badge';
+          leftBadge.textContent = `PAGE ${pageLeft} (Slots ${startSlotLeft}-${b.type==='pokedex'?Math.min(startSlotLeft+slotsPerPage-1, 1025):startSlotLeft+slotsPerPage-1})`;
+          leftContainer.appendChild(leftBadge);
+          leftContainer.appendChild(createGridHTML(startSlotLeft, slotsPerPage, b, slots, true));
+          bookSpread.appendChild(leftContainer);
+
+          const spine = document.createElement('div');
+          spine.className = 'binder-spine';
+          bookSpread.appendChild(spine);
+        }
+
+        if (rightExists) {
+          const rightContainer = document.createElement('div');
+          rightContainer.className = 'binder-page-side';
+          const rightBadge = document.createElement('div');
+          rightBadge.className = 'page-title-badge';
+          rightBadge.textContent = isCoverSpread
+            ? `COVER — PAGE 1 (Slots 1-${b.type==='pokedex'?Math.min(slotsPerPage, 1025):slotsPerPage})`
+            : `PAGE ${pageRight} (Slots ${startSlotRight}-${b.type==='pokedex'?Math.min(startSlotRight+slotsPerPage-1, 1025):startSlotRight+slotsPerPage-1})`;
+          rightContainer.appendChild(rightBadge);
+          rightContainer.appendChild(createGridHTML(startSlotRight, slotsPerPage, b, slots, true));
+          bookSpread.appendChild(rightContainer);
+        }
+        wrapper.appendChild(bookSpread);
+      }
+    }
+
+    document.getElementById('nav-prev').onclick = () => {
+      if (viewMode === 'single') {
+        if (currentPage > 1) { currentPage--; renderActiveGrid(); }
+      } else {
+        if (currentPage === 2) { currentPage = 1; renderActiveGrid(); }
+        else if (currentPage > 2) { currentPage -= 2; renderActiveGrid(); }
+      }
+    };
+
+    document.getElementById('nav-next').onclick = () => {
+      const b = currentBinderData.binder;
+      const pokedexMaxPage = 114; // Math.ceil(1025 / 9)
+      if (viewMode === 'single') {
+        if (b.type === 'pokedex' && currentPage >= pokedexMaxPage) return;
+        currentPage++;
+        renderActiveGrid();
+      } else {
+        const nextLeft = currentPage === 1 ? 2 : currentPage + 2;
+        if (b.type === 'pokedex' && nextLeft > pokedexMaxPage) return;
+        currentPage = nextLeft;
+        renderActiveGrid();
+      }
+    };
+
+    async function clearSlot(num) {
+      await api(`/api/binders/${currentBinderId}/slots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot_number: num, card_id: null })
+      });
+      selectBinder(currentBinderId, true); 
+    }
+
+    async function deleteCurrentBinder() {
+      if(confirm("Are you sure you want to permanently delete this binder?")) {
+        await api(`/api/binders/${currentBinderId}`, { method: 'DELETE' });
+        currentBinderId = null;
+        loadBinders();
+      }
+    }
+
+    async function assignCardToSlot(cardId) {
+      await api(`/api/binders/${currentBinderId}/slots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot_number: targetSlotNumber, card_id: cardId })
+      });
+      closeSearchOverlay();
+      selectBinder(currentBinderId, true); 
+    }
+
+    function openModal(cardData) {
+      const modal = document.getElementById('card-modal');
+      const img = document.getElementById('modal-img');
+      const nameEl = document.getElementById('modal-card-name');
+      const priceEl = document.getElementById('modal-card-price');
+
+      img.src = cardData.image_large || cardData.image_small || '';
+      img.alt = cardData.name || 'Enlarged card';
+      nameEl.textContent = cardData.name || '';
+
+      let priceLabel = 'Price n/a';
+      try {
+        priceLabel = formatPrice(cardData.price_market, cardData.currency) || priceLabel;
+      } catch (e) { }
+      priceEl.textContent = priceLabel;
+
+      modal.style.display = 'flex';
+      requestAnimationFrame(() => modal.classList.add('active'));
+      document.addEventListener('keydown', handleModalEscape);
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('card-modal');
+      modal.classList.remove('active');
+      document.removeEventListener('keydown', handleModalEscape);
+      setTimeout(() => {
+        if (!modal.classList.contains('active')) modal.style.display = 'none';
+      }, 250);
+    }
+
+    function handleModalEscape(e) {
+      if (e.key === 'Escape') closeModal();
+    }
+
+    requireAuth().then(user => { if (user) loadBinders(); });
+  </script>
+</body>
+</html>z
