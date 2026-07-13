@@ -43,6 +43,7 @@ async function requireAuth() {
     }
     const nameEl = document.getElementById('current-username');
     if (nameEl) nameEl.textContent = data.user.username || data.user.email;
+    renderUserAvatar(data.user);
     return data.user;
   } catch (err) {
     window.location.href = 'login.html';
@@ -184,6 +185,84 @@ function showAboutModal() {
       </div>
     `;
     document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+}
+
+// ---------- Avatar utente (foto profilo predefinita) ----------
+const GEN1_NAMES = ["Bulbasaur","Ivysaur","Venusaur","Charmander","Charmeleon","Charizard","Squirtle","Wartortle","Blastoise","Caterpie","Metapod","Butterfree","Weedle","Kakuna","Beedrill","Pidgey","Pidgeotto","Pidgeot","Rattata","Raticate","Spearow","Fearow","Ekans","Arbok","Pikachu","Raichu","Sandshrew","Sandslash","Nidoran♀","Nidorina","Nidoqueen","Nidoran♂","Nidorino","Nidoking","Clefairy","Clefable","Vulpix","Ninetales","Jigglypuff","Wigglytuff","Zubat","Golbat","Oddish","Gloom","Vileplume","Paras","Parasect","Venonat","Venomoth","Diglett","Dugtrio","Meowth","Persian","Psyduck","Golduck","Mankey","Primeape","Growlithe","Arcanine","Poliwag","Poliwhirl","Poliwrath","Abra","Kadabra","Alakazam","Machop","Machoke","Machamp","Bellsprout","Weepinbell","Victreebel","Tentacool","Tentacruel","Geodude","Graveler","Golem","Ponyta","Rapidash","Slowpoke","Slowbro","Magnemite","Magneton","Farfetch'd","Doduo","Dodrio","Seel","Dewgong","Grimer","Muk","Shellder","Cloyster","Gastly","Haunter","Gengar","Onix","Drowzee","Hypno","Krabby","Kingler","Voltorb","Electrode","Exeggcute","Exeggutor","Cubone","Marowak","Hitmonlee","Hitmonchan","Lickitung","Koffing","Weezing","Rhyhorn","Rhydon","Chansey","Tangela","Kangaskhan","Horsea","Seadra","Goldeen","Seaking","Staryu","Starmie","Mr. Mime","Scyther","Jynx","Electabuzz","Magmar","Pinsir","Tauros","Magikarp","Gyarados","Lapras","Ditto","Eevee","Vaporeon","Jolteon","Flareon","Porygon","Omanyte","Omastar","Kabuto","Kabutops","Aerodactyl","Snorlax","Articuno","Zapdos","Moltres","Dratini","Dragonair","Dragonite","Mewtwo","Mew"];
+
+const AVATAR_OPTIONS = [
+  ...GEN1_NAMES.map((name, idx) => ({ id: idx + 1, name })),
+  { id: 196, name: "Espeon" },
+  { id: 197, name: "Umbreon" },
+  { id: 470, name: "Leafeon" },
+  { id: 471, name: "Glaceon" },
+  { id: 700, name: "Sylveon" },
+  { id: 778, name: "Mimikyu" },
+];
+
+function avatarSpriteUrl(pokemonId) {
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemonId}.png`;
+}
+
+let currentUserForAvatar = null;
+
+function renderUserAvatar(user) {
+  currentUserForAvatar = user;
+  const usernameEl = document.getElementById('current-username');
+  if (!usernameEl || !usernameEl.parentElement) return;
+  let btn = document.getElementById('user-avatar-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'user-avatar-btn';
+    btn.className = 'avatar-btn';
+    btn.title = 'Cambia foto profilo';
+    btn.onclick = showAvatarPickerModal;
+    usernameEl.parentElement.insertBefore(btn, usernameEl);
+  }
+  const id = user && user.avatar_pokemon_id;
+  btn.innerHTML = id
+    ? `<img src="${avatarSpriteUrl(id)}" alt="Avatar" onerror="this.style.display='none'">`
+    : `<span class="avatar-placeholder">?</span>`;
+}
+
+function showAvatarPickerModal() {
+  let modal = document.getElementById('avatar-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'avatar-modal';
+    modal.className = 'modal';
+    modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+    const grid = AVATAR_OPTIONS.map(p => `
+      <div class="avatar-option" data-id="${p.id}" title="${escapeHtml(p.name)}">
+        <img src="${avatarSpriteUrl(p.id)}" alt="${escapeHtml(p.name)}" loading="lazy">
+        <span>${escapeHtml(p.name)}</span>
+      </div>
+    `).join('');
+    modal.innerHTML = `
+      <div class="about-card" style="max-width:560px; max-height:80vh; overflow-y:auto;" onclick="event.stopPropagation()">
+        <button class="modal-close" style="position:absolute; top:-14px; right:-14px; width:32px; height:32px; border-radius:50%; background:var(--panel); border:1px solid var(--border); font-size:18px;" onclick="document.getElementById('avatar-modal').style.display='none'">&times;</button>
+        <div class="auth-brand" style="justify-content:flex-start; margin-bottom:14px;"><span class="dot"></span> Scegli la tua foto profilo</div>
+        <div class="avatar-grid">${grid}</div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    modal.querySelectorAll('.avatar-option').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = parseInt(el.dataset.id);
+        try {
+          await api('/api/me/avatar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pokemon_id: id })
+          });
+          if (currentUserForAvatar) currentUserForAvatar.avatar_pokemon_id = id;
+          renderUserAvatar(currentUserForAvatar);
+          modal.style.display = 'none';
+        } catch (err) { alert(err.message); }
+      });
+    });
   }
   modal.style.display = 'flex';
 }

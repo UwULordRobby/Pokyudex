@@ -4,6 +4,7 @@ import threading
 import time
 from functools import wraps
 from pathlib import Path
+from config import USD_TO_EUR_RATE
 
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -75,6 +76,26 @@ def login_required(view_func):
     def wrapped(*args, **kwargs):
         if "user_id" not in session:
             return jsonify({"error": "Authentication required"}), 401
+        return view_func(*args, **kwargs)
+    return wrapped
+
+@app.route("/api/exchange-rate")
+@login_required
+def api_exchange_rate():
+    return jsonify({"usd_to_eur": USD_TO_EUR_RATE})
+def _is_admin(user_id) -> bool:
+    # Semplice: il primo utente registrato (id 1) è considerato admin.
+    return user_id == 1
+
+
+def admin_required(view_func):
+    """Come login_required, ma richiede anche che l'utente sia admin."""
+    @wraps(view_func)
+    def wrapped(*args, **kwargs):
+        if "user_id" not in session:
+            return jsonify({"error": "Authentication required"}), 401
+        if not _is_admin(session["user_id"]):
+            return jsonify({"error": "Accesso admin richiesto"}), 403
         return view_func(*args, **kwargs)
     return wrapped
 
@@ -171,6 +192,10 @@ def api_logout():
     session.clear()
     return jsonify({"success": True})
 
+# Pokémon selezionabili come foto profilo: Gen 1 completa + Mimikyu +
+# tutte le Eeveelutions (Eevee/Vaporeon/Jolteon/Flareon già in Gen 1).
+ALLOWED_AVATAR_IDS = set(range(1, 152)) | {196, 197, 470, 471, 700, 778}
+
 
 @app.route("/api/me")
 def api_me():
@@ -182,7 +207,28 @@ def api_me():
     if not user:
         session.clear()
         return jsonify({"user": None})
-    return jsonify({"user": {"id": user["id"], "email": user["email"], "username": user["username"]}})
+    return jsonify({"user": {
+        "id": user["id"],
+        "email": user["email"],
+        "username": user["username"],
+        "is_admin": _is_admin(user["id"]),
+        "avatar_pokemon_id": user["avatar_pokemon_id"],
+    }})
+
+
+@app.route("/api/me/avatar", methods=["POST"])
+@login_required
+def api_set_avatar():
+    data = request.json or {}
+    try:
+        pokemon_id = int(data.get("pokemon_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "ID Pokémon non valido"}), 400
+    if pokemon_id not in ALLOWED_AVATAR_IDS:
+        return jsonify({"error": "Pokémon non disponibile come avatar"}), 400
+    with db.get_conn() as conn:
+        conn.execute("UPDATE users SET avatar_pokemon_id = ? WHERE id = ?", (pokemon_id, session["user_id"]))
+    return jsonify({"success": True, "avatar_pokemon_id": pokemon_id})
 
 
 def _sync_set_core(conn, set_id: str):
@@ -227,6 +273,72 @@ def start_background_preload():
             return
         _preload_running = True
     threading.Thread(target=_preload_all_sets_worker, daemon=True).start()
+
+
+# ---------- Admin: resync forzato di TUTTI i set ----------
+# A differenza del preload automatico (che salta i set già sincronizzati),
+# questo riscarica sempre ogni set da zero, ignorando last_synced. Utile
+# dopo modifiche allo schema/normalizzazione (es. nuovi campi come i tipi
+# elementali) per rivedere subito l'effetto su dati reali.
+_force_resync_lock = threading.Lock()
+_force_resync_running = False
+_force_resync_status = {"running": False, "total": 0, "done": 0, "current_set": None}
+
+
+def _force_resync_all_worker():
+    global _force_resync_running
+    print("[Admin Resync] Avvio resync FORZATO di tutti i set...")
+    try:
+        with db.get_conn() as conn:
+            sets = db.get_all_sets(conn)
+        _force_resync_status["total"] = len(sets)
+        _force_resync_status["done"] = 0
+
+        for s in sets:
+            set_id = s["id"]
+            _force_resync_status["current_set"] = s["name"]
+            try:
+                with db.get_conn() as conn:
+                    _sync_set_core(conn, set_id)
+                print(f"[Admin Resync] Sincronizzato {s['name']} ({set_id})")
+                time.sleep(2)
+            except Exception as e:
+                print(f"[Admin Resync] Errore su {s['name']}: {e}")
+                time.sleep(5)
+            _force_resync_status["done"] += 1
+    except Exception as e:
+        print(f"[Admin Resync] Errore generale: {e}")
+    finally:
+        with _force_resync_lock:
+            _force_resync_running = False
+        _force_resync_status["running"] = False
+        _force_resync_status["current_set"] = None
+    print("[Admin Resync] Completato!")
+
+
+def start_force_resync_all() -> bool:
+    global _force_resync_running
+    with _force_resync_lock:
+        if _force_resync_running:
+            return False
+        _force_resync_running = True
+    _force_resync_status["running"] = True
+    threading.Thread(target=_force_resync_all_worker, daemon=True).start()
+    return True
+
+
+@app.route("/api/admin/resync-all", methods=["POST"])
+@admin_required
+def api_admin_resync_all():
+    if not start_force_resync_all():
+        return jsonify({"error": "Un resync è già in corso"}), 409
+    return jsonify({"success": True})
+
+
+@app.route("/api/admin/resync-status")
+@admin_required
+def api_admin_resync_status():
+    return jsonify(_force_resync_status)
 
 
 # ---------- Weekly automatic price refresh ----------
@@ -516,6 +628,96 @@ def api_toggle_wishlist():
         is_wished = db.toggle_wishlist_ownership(conn, session["user_id"], card_id)
         return jsonify({"is_wished": is_wished})
 
+@app.route("/api/wishlist/uncategorized")
+@login_required
+def api_wishlist_uncategorized():
+    with db.get_conn() as conn:
+        rows = db.get_uncategorized_wishlist(conn, session["user_id"])
+        return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/wishlist/boards", methods=["GET", "POST"])
+@login_required
+def api_wishlist_boards():
+    user_id = session["user_id"]
+    if request.method == "POST":
+        data = request.json or {}
+        name = (data.get("name") or "").strip()[:60]
+        color = data.get("color") or "#a855f7"
+        if not name:
+            return jsonify({"error": "Il nome della bacheca non può essere vuoto"}), 400
+        if not _HEX_COLOR_RE.match(color):
+            color = "#a855f7"
+        with db.get_conn() as conn:
+            new_id = db.create_wishlist_board(conn, user_id, name, color)
+            return jsonify({"id": new_id, "success": True})
+    with db.get_conn() as conn:
+        rows = db.get_wishlist_boards(conn, user_id)
+        return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/wishlist/boards/<int:board_id>", methods=["GET", "PATCH", "DELETE"])
+@login_required
+def api_wishlist_board_single(board_id):
+    user_id = session["user_id"]
+    with db.get_conn() as conn:
+        board = db.get_wishlist_board(conn, board_id, user_id)
+        if not board:
+            return jsonify({"error": "Bacheca non trovata"}), 404
+
+        if request.method == "DELETE":
+            db.delete_wishlist_board(conn, board_id, user_id)
+            return jsonify({"success": True})
+
+        if request.method == "PATCH":
+            data = request.json or {}
+            name = data.get("name")
+            color = data.get("color")
+            if name is not None:
+                name = name.strip()[:60]
+                if not name:
+                    return jsonify({"error": "Il nome non può essere vuoto"}), 400
+            if color is not None and not _HEX_COLOR_RE.match(color):
+                return jsonify({"error": "Colore non valido"}), 400
+            db.update_wishlist_board(conn, board_id, user_id, name=name, color=color)
+            updated = db.get_wishlist_board(conn, board_id, user_id)
+            return jsonify(dict(updated))
+
+        cards = db.get_wishlist_board_cards(conn, board_id)
+        return jsonify({"board": dict(board), "cards": [dict(c) for c in cards]})
+
+
+@app.route("/api/wishlist/boards/<int:board_id>/cards", methods=["POST"])
+@login_required
+def api_wishlist_board_add_card(board_id):
+    user_id = session["user_id"]
+    data = request.json or {}
+    card_id = data.get("card_id")
+    if not card_id:
+        return jsonify({"error": "ID carta mancante"}), 400
+    with db.get_conn() as conn:
+        board = db.get_wishlist_board(conn, board_id, user_id)
+        if not board:
+            return jsonify({"error": "Bacheca non trovata"}), 404
+        in_wishlist = conn.execute(
+            "SELECT 1 FROM wishlist WHERE user_id = ? AND card_id = ?", (user_id, card_id)
+        ).fetchone()
+        if not in_wishlist:
+            return jsonify({"error": "La carta non è nella tua wishlist"}), 400
+        db.add_card_to_board(conn, board_id, card_id)
+        return jsonify({"success": True})
+
+
+@app.route("/api/wishlist/boards/<int:board_id>/cards/<card_id>", methods=["DELETE"])
+@login_required
+def api_wishlist_board_remove_card(board_id, card_id):
+    user_id = session["user_id"]
+    with db.get_conn() as conn:
+        board = db.get_wishlist_board(conn, board_id, user_id)
+        if not board:
+            return jsonify({"error": "Bacheca non trovata"}), 404
+        db.remove_card_from_board(conn, board_id, card_id)
+        return jsonify({"success": True})
 
 @app.route("/api/sets/toggle-favorite", methods=["POST"])
 @login_required

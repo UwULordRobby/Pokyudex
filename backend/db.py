@@ -97,6 +97,23 @@ CREATE TABLE IF NOT EXISTS binder_slots (
     FOREIGN KEY (binder_id) REFERENCES binders (id),
     FOREIGN KEY (card_id) REFERENCES cards (id)
 );
+
+CREATE TABLE IF NOT EXISTS wishlist_boards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#a855f7',
+    sort_order INTEGER DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
+CREATE TABLE IF NOT EXISTS wishlist_board_cards (
+    board_id INTEGER NOT NULL,
+    card_id TEXT NOT NULL,
+    PRIMARY KEY (board_id, card_id),
+    FOREIGN KEY (board_id) REFERENCES wishlist_boards (id),
+    FOREIGN KEY (card_id) REFERENCES cards (id)
+);
 """
 
 
@@ -206,6 +223,11 @@ def init_db():
         if not _column_exists(conn, "users", "username"):
             conn.execute("ALTER TABLE users ADD COLUMN username TEXT")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
+        
+        # 4c. Add avatar_pokemon_id to users (foto profilo scelta tra
+        # Pokémon predefiniti — vedi ALLOWED_AVATAR_IDS in app.py).
+        if not _column_exists(conn, "users", "avatar_pokemon_id"):
+            conn.execute("ALTER TABLE users ADD COLUMN avatar_pokemon_id INTEGER")
 
         # 5. Reset sync if the Pokédex index is empty
         check = conn.execute("SELECT COUNT(*) AS c FROM cards WHERE national_dex IS NOT NULL").fetchone()
@@ -416,6 +438,13 @@ def toggle_wishlist_ownership(conn, user_id: int, card_id: str):
     ).fetchone()
     if existing:
         conn.execute("DELETE FROM wishlist WHERE user_id = ? AND card_id = ?", (user_id, card_id))
+        # Se la carta esce dalla wishlist, non deve restare "orfana" in
+        # nessuna bacheca dell'utente.
+        conn.execute(
+            """DELETE FROM wishlist_board_cards
+               WHERE card_id = ? AND board_id IN (SELECT id FROM wishlist_boards WHERE user_id = ?)""",
+            (card_id, user_id)
+        )
         return False
     else:
         conn.execute("INSERT INTO wishlist (user_id, card_id) VALUES (?, ?)", (user_id, card_id))
@@ -565,3 +594,94 @@ def set_binder_slot(conn, binder_id: int, slot_number: int, card_id: str | None)
             "INSERT INTO binder_slots (binder_id, slot_number, card_id) VALUES (?, ?, ?)",
             (binder_id, slot_number, card_id)
         )
+
+# ---------- Bacheche personalizzate della wishlist ----------
+
+def get_uncategorized_wishlist(conn, user_id: int):
+    """Carte in wishlist che NON sono ancora state assegnate a nessuna
+    bacheca dell'utente — sono quelle mostrate nella lista principale."""
+    return conn.execute(
+        """SELECT cards.*, sets.name AS set_name, sets.release_date
+           FROM wishlist
+           JOIN cards ON wishlist.card_id = cards.id
+           JOIN sets ON cards.set_id = sets.id
+           WHERE wishlist.user_id = ?
+             AND NOT EXISTS (
+               SELECT 1 FROM wishlist_board_cards wbc
+               JOIN wishlist_boards wb ON wbc.board_id = wb.id
+               WHERE wbc.card_id = cards.id AND wb.user_id = ?
+             )
+           ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC""",
+        (user_id, user_id),
+    ).fetchall()
+
+
+def get_wishlist_boards(conn, user_id: int):
+    return conn.execute(
+        """SELECT wb.*, (SELECT COUNT(*) FROM wishlist_board_cards WHERE board_id = wb.id) AS card_count
+           FROM wishlist_boards wb
+           WHERE wb.user_id = ?
+           ORDER BY wb.sort_order ASC, wb.id ASC""",
+        (user_id,)
+    ).fetchall()
+
+
+def get_wishlist_board(conn, board_id: int, user_id: int):
+    return conn.execute(
+        "SELECT * FROM wishlist_boards WHERE id = ? AND user_id = ?", (board_id, user_id)
+    ).fetchone()
+
+
+def create_wishlist_board(conn, user_id: int, name: str, color: str):
+    next_order = conn.execute(
+        "SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM wishlist_boards WHERE user_id = ?", (user_id,)
+    ).fetchone()["n"]
+    cursor = conn.execute(
+        "INSERT INTO wishlist_boards (user_id, name, color, sort_order) VALUES (?, ?, ?, ?)",
+        (user_id, name, color, next_order)
+    )
+    return cursor.lastrowid
+
+
+def update_wishlist_board(conn, board_id: int, user_id: int, name=None, color=None):
+    fields, params = [], []
+    if name is not None:
+        fields.append("name = ?"); params.append(name)
+    if color is not None:
+        fields.append("color = ?"); params.append(color)
+    if not fields:
+        return False
+    params.extend([board_id, user_id])
+    cursor = conn.execute(
+        f"UPDATE wishlist_boards SET {', '.join(fields)} WHERE id = ? AND user_id = ?", params
+    )
+    return cursor.rowcount > 0
+
+
+def delete_wishlist_board(conn, board_id: int, user_id: int):
+    conn.execute(
+        """DELETE FROM wishlist_board_cards
+           WHERE board_id = ? AND board_id IN (SELECT id FROM wishlist_boards WHERE id = ? AND user_id = ?)""",
+        (board_id, board_id, user_id)
+    )
+    conn.execute("DELETE FROM wishlist_boards WHERE id = ? AND user_id = ?", (board_id, user_id))
+
+
+def get_wishlist_board_cards(conn, board_id: int):
+    return conn.execute(
+        """SELECT cards.*, sets.name AS set_name, sets.release_date
+           FROM wishlist_board_cards wbc
+           JOIN cards ON wbc.card_id = cards.id
+           JOIN sets ON cards.set_id = sets.id
+           WHERE wbc.board_id = ?
+           ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC""",
+        (board_id,)
+    ).fetchall()
+
+
+def add_card_to_board(conn, board_id: int, card_id: str):
+    conn.execute("INSERT OR IGNORE INTO wishlist_board_cards (board_id, card_id) VALUES (?, ?)", (board_id, card_id))
+
+
+def remove_card_from_board(conn, board_id: int, card_id: str):
+    conn.execute("DELETE FROM wishlist_board_cards WHERE board_id = ? AND card_id = ?", (board_id, card_id))

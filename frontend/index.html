@@ -37,6 +37,7 @@
       <a href="index.html" class="brand"><span class="dot"></span> Pokyudex</a>
     </div>
     <div class="topbar-right">
+      <button class="btn" id="admin-resync-btn" style="display:none;" title="Forza il resync di tutti i set">🔄 Resync All</button>
       <button class="btn" id="about-btn" title="About the creator">👤 About</button>
       <span id="current-username" class="user-badge"></span>
       <button class="btn" onclick="logoutUser()">Logout</button>
@@ -279,6 +280,59 @@
 
     document.getElementById('about-btn').addEventListener('click', showAboutModal);
 
+    // ---------- Admin: forced resync of every set ----------
+    // Only visible to the admin user (user id 1). Kicks off a background
+    // job that re-downloads every set from the Pokémon TCG API, ignoring
+    // last_synced, and polls /api/admin/resync-status until it's done —
+    // handy right after a data/schema change (e.g. the new type filter)
+    // to see it reflected without waiting for the weekly auto-refresh.
+    function initAdminResync(user) {
+      const btn = document.getElementById('admin-resync-btn');
+      if (!user || !user.is_admin) return;
+      btn.style.display = 'inline-flex';
+
+      let polling = null;
+
+      function setButtonState(status) {
+        if (status.running) {
+          btn.disabled = true;
+          btn.textContent = status.total
+            ? `🔄 Sync ${status.done}/${status.total}...`
+            : '🔄 Starting...';
+        } else {
+          btn.disabled = false;
+          btn.textContent = '🔄 Resync All';
+        }
+      }
+
+      async function pollStatus() {
+        try {
+          const status = await api('/api/admin/resync-status');
+          setButtonState(status);
+          if (!status.running) {
+            clearInterval(polling);
+            polling = null;
+          }
+        } catch (err) {
+          clearInterval(polling);
+          polling = null;
+        }
+      }
+
+      btn.addEventListener('click', async () => {
+        try {
+          await api('/api/admin/resync-all', { method: 'POST' });
+          setButtonState({ running: true, total: 0, done: 0 });
+          polling = setInterval(pollStatus, 2000);
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+
+      // In case a resync was already running (e.g. page reload mid-sync)
+      pollStatus();
+    }
+
     const GLOBAL_RARITY_ORDER = [
       "Common", "Uncommon", "Promo", "Classic Collection", "Rare", "Rare Holo", "Rare BREAK",
       "Rare Holo EX", "Rare Holo GX", "Rare Holo LV.X", "Rare Holo V", "Rare Holo VMAX",
@@ -461,7 +515,12 @@
       } catch (err) { alert(err.message); }
     }
 
-    requireAuth().then(user => { if (user) loadSets(); });
+    requireAuth().then(user => {
+      if (user) {
+        loadSets();
+        initAdminResync(user);
+      }
+    });
   </script>
 </body>
 </html>

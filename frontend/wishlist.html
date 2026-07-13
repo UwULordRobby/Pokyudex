@@ -46,25 +46,93 @@
         <div class="eyebrow" style="margin:0;">Estimated Cost (EUR)</div>
         <div class="stat-val" id="total-val-eur">0.00 €</div>
       </div>
-      <div class="stat-card">
-        <div class="eyebrow" style="margin:0;">Estimated Cost (USD)</div>
-        <div class="stat-val" id="total-val-usd">$0.00</div>
+    </div>
+
+    <!-- ---------- Bacheche ---------- -->
+    <div id="boards-section">
+      <div class="section-title">Le tue bacheche</div>
+      <div class="boards-grid" id="boards-grid"></div>
+    </div>
+
+    <!-- ---------- Vista dettaglio bacheca (nascosta di default) ---------- -->
+    <div id="board-detail-view" style="display:none;">
+      <div class="binder-header" style="margin-bottom: 20px;">
+        <div>
+          <button class="btn" onclick="closeBoardDetail()" style="margin-bottom:10px;">&larr; Tutte le bacheche</button><br>
+          <h2 id="board-detail-title" style="margin:0; font-family:'Rajdhani'; font-size:28px; display:inline-block;"></h2>
+          <button class="icon-btn" title="Modifica bacheca" onclick="openEditBoardModal(currentBoardId)" style="width:30px; height:30px; font-size:13px; vertical-align:middle; margin-left:8px;">✎</button>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-accent" onclick="openAddToBoardOverlay()">+ Aggiungi carte</button>
+          <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="deleteCurrentBoard()">Elimina bacheca</button>
+        </div>
+      </div>
+      <div id="board-cards-container">
+        <div class="state-msg">Nessuna carta in questa bacheca. Usa "+ Aggiungi carte".</div>
       </div>
     </div>
 
-    <div class="controls-row">
-      <select id="sort-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 240px; height: 41px; padding: 0 14px;">
-        <option value="price_desc">Price: highest first</option>
-        <option value="price_asc">Price: lowest first</option>
-        <option value="rarity_desc">Rarity: rarest first</option>
-        <option value="rarity_asc">Rarity: least rare first</option>
-        <option value="date_desc">Release date: newest first</option>
-        <option value="date_asc">Release date: oldest first</option>
-      </select>
+    <!-- ---------- Lista principale (non categorizzate) ---------- -->
+    <div id="main-wishlist-section">
+      <div class="section-title" style="margin-top: 10px;">Non categorizzate</div>
+      <div class="controls-row">
+        <select id="sort-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 240px; height: 41px; padding: 0 14px;">
+          <option value="price_desc">Price: highest first</option>
+          <option value="price_asc">Price: lowest first</option>
+          <option value="rarity_desc">Rarity: rarest first</option>
+          <option value="rarity_asc">Rarity: least rare first</option>
+          <option value="date_desc">Release date: newest first</option>
+          <option value="date_asc">Release date: oldest first</option>
+        </select>
+      </div>
+      <div id="wishlist-container">
+        <div class="state-msg"><span class="spinner"></span>Opening your wishlist...</div>
+      </div>
     </div>
+  </div>
 
-    <div id="wishlist-container">
-      <div class="state-msg"><span class="spinner"></span>Opening your wishlist...</div>
+  <!-- Modal: nuova bacheca -->
+  <div id="new-board-modal" class="modal" onclick="closeNewBoardModal()">
+    <div class="about-card" onclick="event.stopPropagation()" style="max-width:340px;">
+      <button class="modal-close" style="position:absolute; top:-14px; right:-14px; width:32px; height:32px; border-radius:50%; background:var(--panel); border:1px solid var(--border); font-size:18px;" onclick="closeNewBoardModal()">&times;</button>
+      <div class="eyebrow" style="color: var(--gold);">Nuova bacheca</div>
+      <div class="form-group" style="width:100%; margin:14px 0;">
+        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Nome</label>
+        <input type="text" id="new-board-name" placeholder="Es. Carte rosa" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);" />
+      </div>
+      <div class="form-group" style="margin:0 0 20px;">
+        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Colore</label>
+        <input type="color" id="new-board-color" value="#a855f7" style="width: 70px; padding:2px; height:37px;" />
+      </div>
+      <button class="btn btn-accent" style="width:100%;" onclick="createBoard()">Crea bacheca</button>
+    </div>
+  </div>
+
+  <!-- Modal: modifica bacheca -->
+  <div id="edit-board-modal" class="modal" onclick="closeEditBoardModal()">
+    <div class="about-card" onclick="event.stopPropagation()" style="max-width:340px;">
+      <button class="modal-close" style="position:absolute; top:-14px; right:-14px; width:32px; height:32px; border-radius:50%; background:var(--panel); border:1px solid var(--border); font-size:18px;" onclick="closeEditBoardModal()">&times;</button>
+      <div class="eyebrow" style="color: var(--gold);">Modifica bacheca</div>
+      <div class="form-group" style="width:100%; margin:14px 0;">
+        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Nome</label>
+        <input type="text" id="edit-board-name" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);" />
+      </div>
+      <div class="form-group" style="margin:0 0 20px;">
+        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Colore</label>
+        <input type="color" id="edit-board-color" style="width: 70px; padding:2px; height:37px;" />
+      </div>
+      <button class="btn btn-accent" style="width:100%;" onclick="saveEditBoard()">Salva</button>
+    </div>
+  </div>
+
+  <!-- Overlay: aggiungi carte non categorizzate alla bacheca aperta -->
+  <div id="add-to-board-overlay" class="search-overlay">
+    <div style="max-width: 1200px; margin: 0 auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2>Aggiungi carte a "<span id="add-to-board-title"></span>"</h2>
+        <button class="btn" onclick="closeAddToBoardOverlay()">Chiudi</button>
+      </div>
+      <div id="add-to-board-container"></div>
     </div>
   </div>
 
@@ -82,7 +150,12 @@
       { h: 250, s: 62, l: 55 },
     ]);
 
-    let wishlist = [];
+    let wishlist = [];          // Wishlist completa (per le statistiche)
+    let uncategorized = [];     // Carte non ancora assegnate a nessuna bacheca
+    let boards = [];            // Bacheche dell'utente
+    let currentBoardId = null;
+    let editingBoardId = null;
+    let usdToEurRate = 0.92;
 
     const RARITY_ORDER = [
       "Common", "Uncommon", "Promo", "Classic Collection", "Rare", "Rare Holo", "Rare BREAK",
@@ -93,27 +166,30 @@
       "ACE SPEC Rare", "Black White Rare", "Rare Secret", "Secret Rare", "Rare Rainbow", "Hyper Rare"
     ];
 
+    async function loadExchangeRate() {
+      try {
+        const data = await api('/api/exchange-rate');
+        usdToEurRate = data.usd_to_eur;
+      } catch (err) { console.error('Impossibile caricare il tasso di cambio:', err); }
+    }
+
+    // Totale sempre e solo in EUR: i prezzi USD vengono convertiti al
+    // tasso corrente prima di sommarli a quelli già in EUR.
     function calculateStats(cards) {
       document.getElementById('total-cards').textContent = cards.length;
-      let eur = 0, usd = 0;
+      let totalEur = 0;
       cards.forEach(c => {
-        if (c.price_market) {
-          if (c.currency === 'EUR') eur += c.price_market;
-          else if (c.currency === 'USD') usd += c.price_market;
-        }
+        if (c.price_market == null) return;
+        if (c.currency === 'EUR') totalEur += c.price_market;
+        else if (c.currency === 'USD') totalEur += c.price_market * usdToEurRate;
       });
-      document.getElementById('total-val-eur').textContent = eur.toFixed(2) + ' €';
-      document.getElementById('total-val-usd').textContent = '$' + usd.toFixed(2);
+      document.getElementById('total-val-eur').textContent = totalEur.toFixed(2) + ' €';
     }
 
     function sortCards(cardsArray, criteria) {
       return [...cardsArray].sort((a, b) => {
-        if (criteria === 'price_desc') {
-          return (b.price_market ?? -1) - (a.price_market ?? -1);
-        }
-        if (criteria === 'price_asc') {
-          return (a.price_market ?? Infinity) - (b.price_market ?? Infinity);
-        }
+        if (criteria === 'price_desc') return (b.price_market ?? -1) - (a.price_market ?? -1);
+        if (criteria === 'price_asc') return (a.price_market ?? Infinity) - (b.price_market ?? Infinity);
         if (criteria === 'rarity_desc') {
           let idxA = RARITY_ORDER.findIndex(r => r.toLowerCase() === (a.rarity || "").toLowerCase());
           let idxB = RARITY_ORDER.findIndex(r => r.toLowerCase() === (b.rarity || "").toLowerCase());
@@ -124,25 +200,22 @@
           let idxB = RARITY_ORDER.findIndex(r => r.toLowerCase() === (b.rarity || "").toLowerCase());
           return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
         }
-        if (criteria === 'date_desc') {
-          return (b.release_date || "").localeCompare(a.release_date || "");
-        }
-        if (criteria === 'date_asc') {
-          return (a.release_date || "").localeCompare(b.release_date || "");
-        }
+        if (criteria === 'date_desc') return (b.release_date || "").localeCompare(a.release_date || "");
+        if (criteria === 'date_asc') return (a.release_date || "").localeCompare(b.release_date || "");
         return 0;
       });
     }
 
+    // ---------- Lista principale (non categorizzate), draggable verso le bacheche ----------
     function renderWishlist() {
       const container = document.getElementById('wishlist-container');
-      if (!wishlist.length) {
-        container.innerHTML = '<div class="state-msg">No cards in your wishlist.</div>';
+      if (!uncategorized.length) {
+        container.innerHTML = '<div class="state-msg">Nessuna carta non categorizzata. Cerca carte nell\'Home e aggiungile con ❤️.</div>';
         return;
       }
 
       const currentCriteria = document.getElementById('sort-select').value;
-      const sorted = sortCards(wishlist, currentCriteria);
+      const sorted = sortCards(uncategorized, currentCriteria);
 
       const grid = document.createElement('div');
       grid.className = 'cards-grid';
@@ -150,8 +223,13 @@
         const priceLabel = formatPrice(c.price_market, c.currency);
         const tile = document.createElement('div');
         tile.className = 'card-tile';
+        tile.draggable = true;
+        tile.dataset.cardId = c.id;
         const bigImgUrl = c.image_large || c.image_small || '';
-        tile.onclick = () => openModal(bigImgUrl);
+        tile.onclick = (e) => {
+          if (tile.classList.contains('dragging-suppress-click')) { tile.classList.remove('dragging-suppress-click'); return; }
+          openModal(bigImgUrl);
+        };
 
         tile.innerHTML = `
           <button class="wish-btn wished" onclick="event.stopPropagation(); removeCard('${c.id}')">❤️</button>
@@ -163,6 +241,14 @@
             <div class="card-rarity">${escapeHtml(c.rarity || 'Unknown rarity')}</div>
           </div>
         `;
+
+        tile.addEventListener('dragstart', (e) => {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', c.id);
+          window.draggedWishlistCardId = c.id;
+        });
+        tile.addEventListener('dragend', () => { tile.classList.add('dragging-suppress-click'); });
+
         grid.appendChild(tile);
       });
       container.innerHTML = '';
@@ -173,6 +259,16 @@
       try {
         wishlist = await api('/api/wishlist');
         calculateStats(wishlist);
+      } catch (err) {
+        document.getElementById('wishlist-container').innerHTML = `<div class="state-msg error">Error: ${err.message}</div>`;
+        return;
+      }
+      await loadUncategorized();
+    }
+
+    async function loadUncategorized() {
+      try {
+        uncategorized = await api('/api/wishlist/uncategorized');
         renderWishlist();
       } catch (err) {
         document.getElementById('wishlist-container').innerHTML = `<div class="state-msg error">Error: ${err.message}</div>`;
@@ -187,6 +283,7 @@
           body: JSON.stringify({ card_id: cardId })
         });
         wishlist = wishlist.filter(c => c.id !== cardId);
+        uncategorized = uncategorized.filter(c => c.id !== cardId);
         calculateStats(wishlist);
         renderWishlist();
       } catch (err) { alert(err.message); }
@@ -201,7 +298,263 @@
     }
     function closeModal() { document.getElementById('card-modal').style.display = "none"; }
 
-    requireAuth().then(user => { if (user) loadWishlist(); });
+    // ---------- Bacheche: griglia + drag&drop ----------
+    async function loadBoards() {
+      try {
+        boards = await api('/api/wishlist/boards');
+        renderBoardsGrid();
+      } catch (err) { console.error('Errore caricamento bacheche:', err); }
+    }
+
+    function renderBoardsGrid() {
+      const grid = document.getElementById('boards-grid');
+      grid.innerHTML = '';
+
+      boards.forEach(b => {
+        const tile = document.createElement('div');
+        tile.className = 'board-tile';
+        tile.style.background = `linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.55) 100%), ${b.color}`;
+        tile.onclick = () => openBoardDetail(b.id);
+        tile.innerHTML = `
+          <div class="board-tile-actions">
+            <button title="Modifica" onclick="event.stopPropagation(); openEditBoardModal(${b.id})">✎</button>
+            <button title="Elimina" onclick="event.stopPropagation(); deleteBoardById(${b.id})">🗑</button>
+          </div>
+          <div class="board-tile-name">${escapeHtml(b.name)}</div>
+          <div class="board-tile-count">${b.card_count} cart${b.card_count === 1 ? 'a' : 'e'}</div>
+        `;
+
+        tile.addEventListener('dragover', (e) => { e.preventDefault(); tile.classList.add('drag-over'); });
+        tile.addEventListener('dragleave', () => tile.classList.remove('drag-over'));
+        tile.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          tile.classList.remove('drag-over');
+          const cardId = e.dataTransfer.getData('text/plain') || window.draggedWishlistCardId;
+          if (!cardId) return;
+          try {
+            await api(`/api/wishlist/boards/${b.id}/cards`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ card_id: cardId })
+            });
+            await loadUncategorized();
+            await loadBoards();
+          } catch (err) { alert(err.message); }
+        });
+
+        grid.appendChild(tile);
+      });
+
+      // Tile "+ Nuova bacheca"
+      const newTile = document.createElement('div');
+      newTile.className = 'board-tile new-board-tile';
+      newTile.textContent = '+ Nuova bacheca';
+      newTile.onclick = openNewBoardModal;
+      grid.appendChild(newTile);
+    }
+
+    function openNewBoardModal() {
+      document.getElementById('new-board-name').value = '';
+      document.getElementById('new-board-color').value = '#a855f7';
+      document.getElementById('new-board-modal').style.display = 'flex';
+    }
+    function closeNewBoardModal() { document.getElementById('new-board-modal').style.display = 'none'; }
+
+    async function createBoard() {
+      const name = document.getElementById('new-board-name').value.trim();
+      const color = document.getElementById('new-board-color').value;
+      if (!name) { alert('Inserisci un nome per la bacheca.'); return; }
+      try {
+        await api('/api/wishlist/boards', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, color })
+        });
+        closeNewBoardModal();
+        loadBoards();
+      } catch (err) { alert(err.message); }
+    }
+
+    function openEditBoardModal(boardId) {
+      const b = boards.find(x => x.id === boardId);
+      if (!b) return;
+      editingBoardId = boardId;
+      document.getElementById('edit-board-name').value = b.name;
+      document.getElementById('edit-board-color').value = b.color;
+      document.getElementById('edit-board-modal').style.display = 'flex';
+    }
+    function closeEditBoardModal() { document.getElementById('edit-board-modal').style.display = 'none'; }
+
+    async function saveEditBoard() {
+      const name = document.getElementById('edit-board-name').value.trim();
+      const color = document.getElementById('edit-board-color').value;
+      if (!name) { alert('Il nome non può essere vuoto.'); return; }
+      try {
+        await api(`/api/wishlist/boards/${editingBoardId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, color })
+        });
+        closeEditBoardModal();
+        await loadBoards();
+        if (currentBoardId === editingBoardId) {
+          document.getElementById('board-detail-title').textContent = name;
+        }
+      } catch (err) { alert(err.message); }
+    }
+
+    async function deleteBoardById(boardId) {
+      if (!confirm('Eliminare questa bacheca? Le carte torneranno nella lista principale.')) return;
+      try {
+        await api(`/api/wishlist/boards/${boardId}`, { method: 'DELETE' });
+        await loadBoards();
+        await loadUncategorized();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function deleteCurrentBoard() {
+      if (!confirm('Eliminare questa bacheca? Le carte torneranno nella lista principale.')) return;
+      try {
+        await api(`/api/wishlist/boards/${currentBoardId}`, { method: 'DELETE' });
+        closeBoardDetail();
+        await loadBoards();
+        await loadUncategorized();
+      } catch (err) { alert(err.message); }
+    }
+
+    // ---------- Vista dettaglio bacheca ----------
+    async function openBoardDetail(boardId) {
+      currentBoardId = boardId;
+      document.getElementById('boards-section').style.display = 'none';
+      document.getElementById('main-wishlist-section').style.display = 'none';
+      document.getElementById('board-detail-view').style.display = 'block';
+      await renderBoardDetail();
+    }
+
+    function closeBoardDetail() {
+      currentBoardId = null;
+      document.getElementById('board-detail-view').style.display = 'none';
+      document.getElementById('boards-section').style.display = 'block';
+      document.getElementById('main-wishlist-section').style.display = 'block';
+    }
+
+    async function renderBoardDetail() {
+      const container = document.getElementById('board-cards-container');
+      container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Caricamento...</div>';
+      try {
+        const data = await api(`/api/wishlist/boards/${currentBoardId}`);
+        document.getElementById('board-detail-title').textContent = data.board.name;
+        document.getElementById('board-detail-title').style.borderBottom = `3px solid ${data.board.color}`;
+
+        if (!data.cards.length) {
+          container.innerHTML = '<div class="state-msg">Nessuna carta in questa bacheca. Usa "+ Aggiungi carte".</div>';
+          return;
+        }
+
+        const grid = document.createElement('div');
+        grid.className = 'cards-grid';
+        data.cards.forEach((c) => {
+          const priceLabel = formatPrice(c.price_market, c.currency);
+          const tile = document.createElement('div');
+          tile.className = 'card-tile';
+          const bigImgUrl = c.image_large || c.image_small || '';
+          tile.onclick = () => openModal(bigImgUrl);
+          tile.innerHTML = `
+            <button class="card-tile-small-remove" title="Rimuovi dalla bacheca" onclick="event.stopPropagation(); removeCardFromCurrentBoard('${c.id}')">✕</button>
+            <img src="${escapeHtml(c.image_large || c.image_small || '')}" alt="${escapeHtml(c.name)}" loading="lazy" onerror="this.src='${escapeHtml(c.image_small || '')}'">
+            <div class="price-tag ${priceLabel ? '' : 'no-price'}">${priceLabel || 'n/a'}</div>
+            <div class="card-info">
+              <div class="card-name">${escapeHtml(c.name)}${c.card_number ? ' · #' + escapeHtml(c.card_number) : ''}</div>
+              <div class="card-rarity" style="color: var(--teal); font-weight:600; margin-bottom:2px;">${escapeHtml(c.set_name)}</div>
+              <div class="card-rarity">${escapeHtml(c.rarity || 'Unknown rarity')}</div>
+            </div>
+          `;
+          grid.appendChild(tile);
+        });
+        container.innerHTML = '';
+        container.appendChild(grid);
+      } catch (err) {
+        container.innerHTML = `<div class="state-msg error">Error: ${err.message}</div>`;
+      }
+    }
+
+    async function removeCardFromCurrentBoard(cardId) {
+      try {
+        await api(`/api/wishlist/boards/${currentBoardId}/cards/${cardId}`, { method: 'DELETE' });
+        await renderBoardDetail();
+        await loadUncategorized();
+        await loadBoards();
+      } catch (err) { alert(err.message); }
+    }
+
+    // ---------- Overlay "+ Aggiungi carte" (dalle non categorizzate) ----------
+    function openAddToBoardOverlay() {
+      const b = boards.find(x => x.id === currentBoardId);
+      document.getElementById('add-to-board-title').textContent = b ? b.name : '';
+      renderAddToBoardList();
+      document.getElementById('add-to-board-overlay').style.display = 'block';
+    }
+    function closeAddToBoardOverlay() {
+      document.getElementById('add-to-board-overlay').style.display = 'none';
+    }
+
+    function renderAddToBoardList() {
+      const container = document.getElementById('add-to-board-container');
+      if (!uncategorized.length) {
+        container.innerHTML = '<div class="state-msg">Non hai carte non categorizzate da aggiungere. Aggiungine di nuove alla wishlist dall\'Home.</div>';
+        return;
+      }
+      const grid = document.createElement('div');
+      grid.className = 'cards-grid';
+      uncategorized.forEach((c) => {
+        const priceLabel = formatPrice(c.price_market, c.currency);
+        const tile = document.createElement('div');
+        tile.className = 'card-tile';
+        tile.innerHTML = `
+          <button class="add-to-board-btn" title="Aggiungi a questa bacheca">+</button>
+          <img src="${escapeHtml(c.image_large || c.image_small || '')}" alt="${escapeHtml(c.name)}" loading="lazy" onerror="this.src='${escapeHtml(c.image_small || '')}'">
+          <div class="price-tag ${priceLabel ? '' : 'no-price'}">${priceLabel || 'n/a'}</div>
+          <div class="card-info">
+            <div class="card-name">${escapeHtml(c.name)}${c.card_number ? ' · #' + escapeHtml(c.card_number) : ''}</div>
+            <div class="card-rarity">${escapeHtml(c.set_name)}</div>
+          </div>
+        `;
+        const addBtn = tile.querySelector('.add-to-board-btn');
+        addBtn.onclick = async (e) => {
+          e.stopPropagation();
+          if (addBtn.classList.contains('added')) return;
+          try {
+            await api(`/api/wishlist/boards/${currentBoardId}/cards`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ card_id: c.id })
+            });
+            addBtn.classList.add('added');
+            addBtn.textContent = '✓';
+          } catch (err) { alert(err.message); }
+        };
+        grid.appendChild(tile);
+      });
+      container.innerHTML = '';
+      container.appendChild(grid);
+    }
+
+    // Quando si chiude l'overlay, se sono state aggiunte carte, aggiorna tutto
+    document.getElementById('add-to-board-overlay').addEventListener('click', async (e) => {
+      if (e.target.id === 'add-to-board-overlay') {
+        closeAddToBoardOverlay();
+        await loadUncategorized();
+        await loadBoards();
+        await renderBoardDetail();
+      }
+    });
+
+    requireAuth().then(async (user) => {
+      if (!user) return;
+      await loadExchangeRate();
+      await loadBoards();
+      await loadWishlist();
+    });
   </script>
 </body>
 </html>
