@@ -6,6 +6,21 @@
   <title>Pokyudex — Home</title>
   <link rel="stylesheet" href="style.css" />
   <style>:root { --dot-color: #ffffff; }</style>
+  <style>
+    .drag-handle {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      color: var(--text-muted);
+      font-size: 16px;
+      cursor: grab;
+      user-select: none;
+      z-index: 2;
+    }
+    #favorites-container .set-tile { cursor: grab; }
+    #favorites-container .set-tile.dragging { opacity: 0.4; }
+    #favorites-container .set-tile.drag-over { border-color: var(--gold); box-shadow: 0 0 15px rgba(240, 185, 61, 0.35); }
+  </style>
 </head>
 <body>
   <div class="topbar">
@@ -58,6 +73,10 @@
           <option value="">-- Any Rarity --</option>
         </select>
 
+        <select id="card-type-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 180px; height: 41px; padding: 0 14px;">
+          <option value="">-- Any Type --</option>
+        </select>
+
         <select id="sort-cards-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 200px; height: 41px; padding: 0 14px;">
           <option value="price_desc">Price: highest first</option>
           <option value="price_asc">Price: lowest first</option>
@@ -94,6 +113,7 @@
     let allSets = [];
     let globalSearchResults = []; // Caches loaded results so they can be sorted on the fly
     let raritiesLoaded = false;
+    let typesLoaded = false;
 
     const tabSetsBtn = document.getElementById('tab-sets-btn');
     const tabCardsBtn = document.getElementById('tab-cards-btn');
@@ -113,22 +133,111 @@
       sectionSets.style.display = 'none';
       sectionCards.style.display = 'block';
       const currentName = document.getElementById('card-name-input').value.trim();
-      loadGlobalRarities(currentName); 
+      loadGlobalRarities(currentName);
+      if (!typesLoaded) { loadGlobalTypes(); }
     });
 
     function renderSetsPage() {
       const query = document.getElementById('search-input').value.toLowerCase();
       const filteredSets = allSets.filter((s) => s.name.toLowerCase().includes(query));
-      const favoriteSets = allSets.filter((s) => s.is_favorite);
+      const favoriteSets = allSets
+        .filter((s) => s.is_favorite)
+        .sort((a, b) => (a.fav_sort_order ?? 0) - (b.fav_sort_order ?? 0));
       const favSection = document.getElementById('favorites-section');
       
       if (favoriteSets.length > 0 && !query) {
         favSection.style.display = 'block';
-        renderSetsGrid(favoriteSets, document.getElementById('favorites-container'));
+        renderFavoritesGrid(favoriteSets, document.getElementById('favorites-container'));
       } else {
         favSection.style.display = 'none';
       }
       renderSetsGrid(filteredSets, document.getElementById('sets-container'));
+    }
+
+    // Favorites grid: same tiles as renderSetsGrid, but draggable so the
+    // person can reorder them by preference instead of release date.
+    // The new order is persisted via /api/sets/favorites/reorder.
+    function renderFavoritesGrid(sets, container) {
+      if (!sets.length) { container.innerHTML = ''; return; }
+      const grid = document.createElement('div');
+      grid.className = 'sets-grid';
+
+      sets.forEach((s) => {
+        const tile = document.createElement('div');
+        tile.className = 'set-tile';
+        tile.style.position = 'relative';
+        tile.draggable = true;
+        tile.dataset.setId = s.id;
+        tile.onclick = (e) => {
+          if (tile.classList.contains('dragging-suppress-click')) { tile.classList.remove('dragging-suppress-click'); return; }
+          window.location.href = `set.html?id=${encodeURIComponent(s.id)}`;
+        };
+        tile.innerHTML = `
+          <button class="collect-btn owned" style="top: 8px; right: 8px; left: auto; font-size:14px;" onclick="event.stopPropagation(); toggleFavoriteSet('${s.id}', this)">★</button>
+          <div class="drag-handle" title="Drag to reorder">⠿</div>
+          ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
+          <div class="set-name">${escapeHtml(s.name)}</div>
+          <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+        `;
+
+        tile.addEventListener('dragstart', (e) => {
+          window.draggedFavoriteSetId = s.id;
+          tile.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        tile.addEventListener('dragend', () => {
+          tile.classList.remove('dragging');
+          tile.classList.add('dragging-suppress-click');
+        });
+        tile.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          tile.classList.add('drag-over');
+        });
+        tile.addEventListener('dragleave', () => tile.classList.remove('drag-over'));
+        tile.addEventListener('drop', (e) => {
+          e.preventDefault();
+          tile.classList.remove('drag-over');
+          const draggedId = window.draggedFavoriteSetId;
+          const targetId = s.id;
+          if (!draggedId || draggedId === targetId) return;
+          reorderFavorites(draggedId, targetId);
+        });
+
+        grid.appendChild(tile);
+      });
+      container.innerHTML = '';
+      container.appendChild(grid);
+    }
+
+    let favoritesReorderDebounce;
+    function reorderFavorites(draggedId, targetId) {
+      const favoriteSets = allSets
+        .filter((s) => s.is_favorite)
+        .sort((a, b) => (a.fav_sort_order ?? 0) - (b.fav_sort_order ?? 0));
+      const fromIdx = favoriteSets.findIndex((s) => s.id === draggedId);
+      const toIdx = favoriteSets.findIndex((s) => s.id === targetId);
+      if (fromIdx === -1 || toIdx === -1) return;
+
+      const [moved] = favoriteSets.splice(fromIdx, 1);
+      favoriteSets.splice(toIdx, 0, moved);
+      favoriteSets.forEach((s, idx) => {
+        const original = allSets.find((a) => a.id === s.id);
+        if (original) original.fav_sort_order = idx;
+      });
+
+      renderFavoritesGrid(favoriteSets, document.getElementById('favorites-container'));
+
+      clearTimeout(favoritesReorderDebounce);
+      favoritesReorderDebounce = setTimeout(async () => {
+        try {
+          await api('/api/sets/favorites/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ set_ids: favoriteSets.map((s) => s.id) })
+          });
+        } catch (err) { console.error('Failed to save favorites order:', err); }
+      }, 400);
     }
 
     function renderSetsGrid(sets, container) {
@@ -212,6 +321,22 @@
       rarityDebounceTimer = setTimeout(() => { loadGlobalRarities(e.target.value.trim()); }, 300);
     });
 
+    async function loadGlobalTypes() {
+      const select = document.getElementById('card-type-select');
+      const currentSelected = select.value;
+      try {
+        const types = await api('/api/types');
+        select.innerHTML = '<option value="">-- Any Type --</option>';
+        types.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t; opt.textContent = t;
+          if (t === currentSelected) opt.selected = true;
+          select.appendChild(opt);
+        });
+        typesLoaded = true;
+      } catch (err) { console.error(err); }
+    }
+
     function sortCards(cardsArray, criteria) {
       return [...cardsArray].sort((a, b) => {
         if (criteria === 'price_desc') return (b.price_market ?? -1) - (a.price_market ?? -1);
@@ -268,16 +393,17 @@
     async function searchCardsGlobal() {
       const name = document.getElementById('card-name-input').value.trim();
       const rarity = document.getElementById('card-rarity-select').value;
+      const type = document.getElementById('card-type-select').value;
       const container = document.getElementById('global-cards-container');
 
-      if (!name && !rarity) {
-        container.innerHTML = '<div class="state-msg error">Enter a card name or select a rarity to filter.</div>';
+      if (!name && !rarity && !type) {
+        container.innerHTML = '<div class="state-msg error">Enter a card name, or select a rarity and/or type to filter.</div>';
         return;
       }
       container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Searching...</div>';
 
       try {
-        const url = `/api/cards/search?name=${encodeURIComponent(name)}&rarity=${encodeURIComponent(rarity)}`;
+        const url = `/api/cards/search?name=${encodeURIComponent(name)}&rarity=${encodeURIComponent(rarity)}&type=${encodeURIComponent(type)}`;
         globalSearchResults = await api(url);
         
         if (!globalSearchResults.length) {
@@ -327,7 +453,10 @@
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ set_id: setId })
         });
         const set = allSets.find(s => s.id === setId);
-        if (set) set.is_favorite = res.is_favorite;
+        if (set) {
+          set.is_favorite = res.is_favorite;
+          if (res.is_favorite) { set.fav_sort_order = Number.MAX_SAFE_INTEGER; }
+        }
         renderSetsPage();
       } catch (err) { alert(err.message); }
     }

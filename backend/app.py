@@ -354,15 +354,16 @@ def api_refresh_sets():
 def api_get_set_cards(set_id):
     user_id = session["user_id"]
     rarity = request.args.get("rarity")
+    card_type = request.args.get("type")
     with db.get_conn() as conn:
         set_row = db.get_set(conn, set_id)
-        cards = db.get_cards_for_set(conn, set_id, rarity, user_id)
+        cards = db.get_cards_for_set(conn, set_id, rarity, user_id, card_type)
 
         if not cards and (not set_row or not set_row["last_synced"]):
             synced = _sync_set(conn, set_id)
             if isinstance(synced, tuple):
                 return synced
-            cards = db.get_cards_for_set(conn, set_id, rarity, user_id)
+            cards = db.get_cards_for_set(conn, set_id, rarity, user_id, card_type)
             set_row = db.get_set(conn, set_id)
 
         rarities = db.get_rarities_for_set(conn, set_id)
@@ -410,6 +411,7 @@ def api_search_cards():
     name = request.args.get("name", "").strip()
     rarity = request.args.get("rarity")
     pokedex_number = request.args.get("pokedex_number")
+    card_type = request.args.get("type")
 
     # Numeric conversion for SQLite
     if pokedex_number and pokedex_number.strip():
@@ -421,7 +423,7 @@ def api_search_cards():
         pokedex_number = None
 
     with db.get_conn() as conn:
-        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id)
+        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type)
 
     # If the local database is empty, query the official API live
     if not cards:
@@ -436,7 +438,7 @@ def api_search_cards():
                             if s_id and not db.get_set(conn, s_id):
                                 db.upsert_set(conn, pokemon_api.normalize_set(raw.get("set", {})))
                             db.upsert_card(conn, pokemon_api.normalize_card(raw, s_id))
-                        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id)
+                        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type)
             except Exception as e:
                 print(f"Dex fallback error: {e}")
 
@@ -451,7 +453,7 @@ def api_search_cards():
                             if s_id and not db.get_set(conn, s_id):
                                 db.upsert_set(conn, pokemon_api.normalize_set(raw.get("set", {})))
                             db.upsert_card(conn, pokemon_api.normalize_card(raw, s_id))
-                        cards = db.search_cards_global(conn, name, rarity, pokedex_number, user_id)
+                        cards = db.search_cards_global(conn, name, rarity, pokedex_number, user_id, card_type)
             except Exception as e:
                 print(f"Name fallback error: {e}")
 
@@ -465,6 +467,14 @@ def api_global_rarities():
     with db.get_conn() as conn:
         rarities = db.get_all_global_rarities(conn, name)
         return jsonify(rarities)
+
+
+@app.route("/api/types")
+@login_required
+def api_global_types():
+    with db.get_conn() as conn:
+        types = db.get_all_global_types(conn)
+        return jsonify(types)
 
 
 @app.route("/api/collection")
@@ -519,6 +529,18 @@ def api_toggle_set_favorite():
         return jsonify({"is_favorite": is_favorite})
 
 
+@app.route("/api/sets/favorites/reorder", methods=["POST"])
+@login_required
+def api_reorder_favorite_sets():
+    data = request.json or {}
+    set_ids = data.get("set_ids")
+    if not isinstance(set_ids, list) or not all(isinstance(s, str) for s in set_ids):
+        return jsonify({"error": "set_ids must be a list of set IDs"}), 400
+    with db.get_conn() as conn:
+        db.reorder_favorite_sets(conn, session["user_id"], set_ids)
+    return jsonify({"success": True})
+
+
 @app.route("/api/binders", methods=["GET", "POST"])
 @login_required
 def api_manage_binders():
@@ -527,6 +549,8 @@ def api_manage_binders():
         data = request.json or {}
         name = (data.get("name") or "New Binder").strip()[:100]
         color = data.get("color", "#242230")
+        inner_color = data.get("inner_color") or color
+        panel_color = data.get("panel_color") or "#16141d"
         b_type = data.get("type", "custom")
         if b_type not in ("custom", "pokedex"):
             b_type = "custom"
@@ -544,14 +568,17 @@ def api_manage_binders():
             rows, cols = 3, 3
 
         with db.get_conn() as conn:
-            new_id = db.create_binder(conn, user_id, name, color, rows, cols, b_type)
+            new_id = db.create_binder(conn, user_id, name, color, rows, cols, b_type, inner_color, panel_color)
             return jsonify({"id": new_id, "success": True})
     with db.get_conn() as conn:
         rows = db.get_all_binders(conn, user_id)
         return jsonify([dict(r) for r in rows])
 
 
-@app.route("/api/binders/<int:binder_id>", methods=["GET", "DELETE"])
+_HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+@app.route("/api/binders/<int:binder_id>", methods=["GET", "PATCH", "DELETE"])
 @login_required
 def api_single_binder(binder_id):
     user_id = session["user_id"]
@@ -559,6 +586,31 @@ def api_single_binder(binder_id):
         if request.method == "DELETE":
             db.delete_binder(conn, binder_id, user_id)
             return jsonify({"success": True})
+
+        if request.method == "PATCH":
+            data = request.json or {}
+            name = data.get("name")
+            color = data.get("color")
+            inner_color = data.get("inner_color")
+            panel_color = data.get("panel_color")
+
+            if name is not None:
+                name = name.strip()[:100]
+                if not name:
+                    return jsonify({"error": "Name cannot be empty"}), 400
+            if color is not None and not _HEX_COLOR_RE.match(color):
+                return jsonify({"error": "Invalid cover color"}), 400
+            if inner_color is not None and not _HEX_COLOR_RE.match(inner_color):
+                return jsonify({"error": "Invalid inner color"}), 400
+            if panel_color is not None and not _HEX_COLOR_RE.match(panel_color):
+                return jsonify({"error": "Invalid panel color"}), 400
+
+            updated = db.update_binder(conn, binder_id, user_id, name=name, color=color, inner_color=inner_color, panel_color=panel_color)
+            if not updated:
+                return jsonify({"error": "Binder not found"}), 404
+            b = db.get_binder(conn, binder_id, user_id)
+            return jsonify(dict(b))
+
         b = db.get_binder(conn, binder_id, user_id)
         if not b:
             return jsonify({"error": "Binder not found"}), 404

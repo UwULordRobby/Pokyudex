@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS cards (
     currency TEXT,
     last_updated TEXT,
     national_dex INTEGER,
+    types TEXT,
     FOREIGN KEY (set_id) REFERENCES sets (id)
 );
 
@@ -61,6 +62,7 @@ CREATE TABLE IF NOT EXISTS collection (
 CREATE TABLE IF NOT EXISTS favorite_sets (
     user_id INTEGER NOT NULL,
     set_id TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
     PRIMARY KEY (user_id, set_id),
     FOREIGN KEY (user_id) REFERENCES users (id),
     FOREIGN KEY (set_id) REFERENCES sets (id)
@@ -79,6 +81,8 @@ CREATE TABLE IF NOT EXISTS binders (
     user_id INTEGER,
     name TEXT NOT NULL,
     color TEXT NOT NULL,
+    inner_color TEXT,
+    panel_color TEXT,
     rows INTEGER DEFAULT 3,
     cols INTEGER DEFAULT 3,
     type TEXT DEFAULT 'custom',
@@ -138,6 +142,7 @@ def _migrate_to_multiuser(conn):
                 CREATE TABLE {table} (
                     user_id INTEGER NOT NULL,
                     {id_col} TEXT NOT NULL,
+                    {"sort_order INTEGER DEFAULT 0," if table == "favorite_sets" else ""}
                     PRIMARY KEY (user_id, {id_col}),
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
@@ -164,12 +169,32 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+        # 2b. Migration for the elemental types column on cards
+        if not _column_exists(conn, "cards", "types"):
+            conn.execute("ALTER TABLE cards ADD COLUMN types TEXT")
+
         # 3. Add the type column to binders if missing
         try:
             conn.execute("ALTER TABLE binders ADD COLUMN type TEXT DEFAULT 'custom'")
         except sqlite3.OperationalError:
             pass
         conn.execute("UPDATE binders SET type = 'custom' WHERE type IS NULL OR type = ''")
+
+        # 3b. Add inner_color to binders (the "page/matting" color around
+        # the grid, defaults to the existing cover color).
+        if not _column_exists(conn, "binders", "inner_color"):
+            conn.execute("ALTER TABLE binders ADD COLUMN inner_color TEXT")
+        conn.execute("UPDATE binders SET inner_color = color WHERE inner_color IS NULL OR inner_color = ''")
+
+        # 3c. Add sort_order to favorite_sets for drag-and-drop reordering
+        if _table_exists(conn, "favorite_sets") and not _column_exists(conn, "favorite_sets", "sort_order"):
+            conn.execute("ALTER TABLE favorite_sets ADD COLUMN sort_order INTEGER DEFAULT 0")
+
+        # 3d. Add panel_color to binders (the grid/slot panel background,
+        # independent from the surrounding page/matting color).
+        if not _column_exists(conn, "binders", "panel_color"):
+            conn.execute("ALTER TABLE binders ADD COLUMN panel_color TEXT")
+        conn.execute("UPDATE binders SET panel_color = '#16141d' WHERE panel_color IS NULL OR panel_color = ''")
 
         # 4. Migration to the multi-user schema (preserves pre-existing data)
         _migrate_to_multiuser(conn)
@@ -263,9 +288,9 @@ def upsert_card(conn, card_data: dict):
     conn.execute(
         """
         INSERT INTO cards (id, set_id, name, card_number, rarity, image_small, image_large,
-                            price_market, price_low, price_mid, price_high, currency, last_updated, national_dex)
+                            price_market, price_low, price_mid, price_high, currency, last_updated, national_dex, types)
         VALUES (:id, :set_id, :name, :card_number, :rarity, :image_small, :image_large,
-                :price_market, :price_low, :price_mid, :price_high, :currency, :last_updated, :national_dex)
+                :price_market, :price_low, :price_mid, :price_high, :currency, :last_updated, :national_dex, :types)
         ON CONFLICT(id) DO UPDATE SET
             name=excluded.name,
             card_number=excluded.card_number,
@@ -278,7 +303,8 @@ def upsert_card(conn, card_data: dict):
             price_high=excluded.price_high,
             currency=excluded.currency,
             last_updated=excluded.last_updated,
-            national_dex=excluded.national_dex
+            national_dex=excluded.national_dex,
+            types=excluded.types
         """,
         card_data,
     )
@@ -290,10 +316,20 @@ def mark_set_synced(conn, set_id: str, timestamp: str):
 
 def get_all_sets(conn, user_id=None):
     return conn.execute(
-        """SELECT *, (SELECT 1 FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS is_favorite
+        """SELECT *,
+           (SELECT 1 FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS is_favorite,
+           (SELECT sort_order FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS fav_sort_order
            FROM sets ORDER BY release_date DESC""",
-        (user_id,),
+        (user_id, user_id),
     ).fetchall()
+
+
+def reorder_favorite_sets(conn, user_id: int, set_ids: list):
+    for idx, set_id in enumerate(set_ids):
+        conn.execute(
+            "UPDATE favorite_sets SET sort_order = ? WHERE user_id = ? AND set_id = ?",
+            (idx, user_id, set_id),
+        )
 
 
 def get_sets_needing_refresh(conn, cutoff_iso: str):
@@ -311,23 +347,20 @@ def get_set(conn, set_id: str):
     return conn.execute("SELECT * FROM sets WHERE id = ?", (set_id,)).fetchone()
 
 
-def get_cards_for_set(conn, set_id: str, rarity: str | None = None, user_id=None):
-    if rarity:
-        return conn.execute(
-            """SELECT *,
-               (SELECT 1 FROM collection WHERE card_id = cards.id AND user_id = ?) AS is_owned,
-               (SELECT 1 FROM wishlist WHERE card_id = cards.id AND user_id = ?) AS is_wished
-               FROM cards WHERE set_id = ? AND rarity = ?
-               ORDER BY price_market IS NULL, price_market DESC""",
-            (user_id, user_id, set_id, rarity),
-        ).fetchall()
-    return conn.execute(
-        """SELECT *,
+def get_cards_for_set(conn, set_id: str, rarity: str | None = None, user_id=None, card_type: str | None = None):
+    query = """SELECT *,
            (SELECT 1 FROM collection WHERE card_id = cards.id AND user_id = ?) AS is_owned,
            (SELECT 1 FROM wishlist WHERE card_id = cards.id AND user_id = ?) AS is_wished
-           FROM cards WHERE set_id = ? ORDER BY price_market IS NULL, price_market DESC""",
-        (user_id, user_id, set_id),
-    ).fetchall()
+           FROM cards WHERE set_id = ?"""
+    params = [user_id, user_id, set_id]
+    if rarity:
+        query += " AND rarity = ?"
+        params.append(rarity)
+    if card_type:
+        query += " AND (',' || types || ',') LIKE ?"
+        params.append(f"%,{card_type},%")
+    query += " ORDER BY price_market IS NULL, price_market DESC"
+    return conn.execute(query, params).fetchall()
 
 
 def get_rarities_for_set(conn, set_id: str):
@@ -338,7 +371,7 @@ def get_rarities_for_set(conn, set_id: str):
     return [r["rarity"] for r in rows]
 
 
-def search_cards_global(conn, name=None, rarity=None, pokedex_number=None, user_id=None):
+def search_cards_global(conn, name=None, rarity=None, pokedex_number=None, user_id=None, card_type=None):
     query = """
         SELECT cards.*, sets.name AS set_name, sets.release_date,
                (SELECT 1 FROM collection WHERE card_id = cards.id AND user_id = ?) AS is_owned,
@@ -357,6 +390,9 @@ def search_cards_global(conn, name=None, rarity=None, pokedex_number=None, user_
     if pokedex_number:
         query += " AND cards.national_dex = ?"
         params.append(pokedex_number)
+    if card_type:
+        query += " AND (',' || cards.types || ',') LIKE ?"
+        params.append(f"%,{card_type},%")
 
     query += " ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC"
     return conn.execute(query, params).fetchall()
@@ -394,7 +430,13 @@ def toggle_set_favorite(conn, user_id: int, set_id: str):
         conn.execute("DELETE FROM favorite_sets WHERE user_id = ? AND set_id = ?", (user_id, set_id))
         return False
     else:
-        conn.execute("INSERT INTO favorite_sets (user_id, set_id) VALUES (?, ?)", (user_id, set_id))
+        next_order = conn.execute(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM favorite_sets WHERE user_id = ?", (user_id,)
+        ).fetchone()["n"]
+        conn.execute(
+            "INSERT INTO favorite_sets (user_id, set_id, sort_order) VALUES (?, ?, ?)",
+            (user_id, set_id, next_order),
+        )
         return True
 
 
@@ -435,12 +477,55 @@ def get_all_global_rarities(conn, name=None):
     return [r["rarity"] for r in rows]
 
 
-def create_binder(conn, user_id: int, name, color, rows, cols, b_type):
+def get_all_global_types(conn):
+    """Distinct elemental types across all synced cards. Types are stored
+    comma-separated (a card can have more than one, e.g. some older dual
+    Energy cards), so this splits and de-duplicates them in Python rather
+    than trying to do it in SQL."""
+    rows = conn.execute("SELECT DISTINCT types FROM cards WHERE types IS NOT NULL AND types != ''").fetchall()
+    seen = set()
+    for r in rows:
+        for t in r["types"].split(","):
+            t = t.strip()
+            if t:
+                seen.add(t)
+    return sorted(seen)
+
+
+def create_binder(conn, user_id: int, name, color, rows, cols, b_type, inner_color=None, panel_color=None):
     cursor = conn.execute(
-        "INSERT INTO binders (user_id, name, color, rows, cols, type) VALUES (?, ?, ?, ?, ?, ?)",
-        (user_id, name, color, rows, cols, b_type)
+        "INSERT INTO binders (user_id, name, color, inner_color, panel_color, rows, cols, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (user_id, name, color, inner_color or color, panel_color or "#16141d", rows, cols, b_type)
     )
     return cursor.lastrowid
+
+
+def update_binder(conn, binder_id: int, user_id: int, name=None, color=None, inner_color=None, panel_color=None):
+    """Updates only the provided fields (name / cover color / page-matting
+    color / grid-panel color) for a binder owned by user_id. Returns True
+    if a row was actually updated."""
+    fields = []
+    params = []
+    if name is not None:
+        fields.append("name = ?")
+        params.append(name)
+    if color is not None:
+        fields.append("color = ?")
+        params.append(color)
+    if inner_color is not None:
+        fields.append("inner_color = ?")
+        params.append(inner_color)
+    if panel_color is not None:
+        fields.append("panel_color = ?")
+        params.append(panel_color)
+    if not fields:
+        return False
+    params.extend([binder_id, user_id])
+    cursor = conn.execute(
+        f"UPDATE binders SET {', '.join(fields)} WHERE id = ? AND user_id = ?",
+        params,
+    )
+    return cursor.rowcount > 0
 
 
 def get_all_binders(conn, user_id: int):

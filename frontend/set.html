@@ -34,7 +34,10 @@
         <h1 id="set-name">Loading...</h1>
       </div>
       
-      <div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <select id="type-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 160px; height: 41px; padding: 0 14px;">
+          <option value="">-- Any Type --</option>
+        </select>
         <select id="sort-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 220px; height: 41px; padding: 0 14px;">
           <option value="price_desc">Price: highest first</option>
           <option value="price_asc">Price: lowest first</option>
@@ -251,7 +254,10 @@
 
     function renderCards() {
       const container = document.getElementById('cards-container');
-      let filtered = activeRarity ? allCards.filter((c) => c.rarity === activeRarity) : allCards;
+      const activeType = document.getElementById('type-select').value;
+      let filtered = allCards;
+      if (activeRarity) filtered = filtered.filter((c) => c.rarity === activeRarity);
+      if (activeType) filtered = filtered.filter((c) => (c.types || '').split(',').includes(activeType));
 
       if (!filtered.length) {
         container.innerHTML = '<div class="state-msg">No cards found for this filter.</div>';
@@ -293,12 +299,28 @@
     }
     function closeModal() { document.getElementById('card-modal').style.display = "none"; }
 
+    function populateTypeSelect(cards) {
+      const select = document.getElementById('type-select');
+      const currentSelected = select.value;
+      const typeSet = new Set();
+      cards.forEach((c) => (c.types || '').split(',').forEach((t) => { t = t.trim(); if (t) typeSet.add(t); }));
+      const sortedTypes = [...typeSet].sort();
+      select.innerHTML = '<option value="">-- Any Type --</option>';
+      sortedTypes.forEach((t) => {
+        const opt = document.createElement('option');
+        opt.value = t; opt.textContent = t;
+        if (t === currentSelected) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
     function applyData(data) {
       if (data.set) {
         document.getElementById('set-name').textContent = data.set.name;
         document.getElementById('set-series').textContent = [data.set.series, data.set.release_date].filter(Boolean).join(' · ');
       }
       allCards = data.cards;
+      populateTypeSelect(allCards);
       const sortedRarities = (data.available_rarities || []).sort((a, b) => {
         let indexA = RARITY_ORDER.findIndex(r => r.toLowerCase() === a.toLowerCase());
         let indexB = RARITY_ORDER.findIndex(r => r.toLowerCase() === b.toLowerCase());
@@ -320,6 +342,7 @@
     }
 
     document.getElementById('sort-select').addEventListener('change', renderCards);
+    document.getElementById('type-select').addEventListener('change', renderCards);
 
     document.getElementById('about-btn').addEventListener('click', showAboutModal);
 

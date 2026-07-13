@@ -137,6 +137,9 @@ def normalize_card(raw: dict, set_id: str) -> dict:
     dex_list = raw.get("nationalPokedexNumbers")
     national_dex = dex_list[0] if (dex_list and isinstance(dex_list, list)) else None
 
+    raw_types = raw.get("types")
+    types = ",".join(raw_types) if (raw_types and isinstance(raw_types, list)) else None
+
     return {
         "id": raw.get("id"),
         "set_id": set_id,
@@ -152,4 +155,5 @@ def normalize_card(raw: dict, set_id: str) -> dict:
         "currency": currency,
         "last_updated": last_updated,
         "national_dex": national_dex,
+        "types": types,
     }

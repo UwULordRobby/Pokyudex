@@ -7,6 +7,91 @@
   <link rel="stylesheet" href="style.css" />
   <style>:root { --dot-color: #4f8bf9; }</style>
   <style>
+    .binder-shelf {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 20px;
+      margin: 24px 0 10px;
+    }
+    .binder-cover-card {
+      position: relative;
+      border-radius: 14px;
+      padding: 20px 16px;
+      min-height: 190px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      cursor: pointer;
+      border: 6px solid rgba(255,255,255,0.08);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.6), inset 0 0 30px rgba(0,0,0,0.55);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      overflow: hidden;
+    }
+    .binder-cover-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 24px 50px rgba(0,0,0,0.7), inset 0 0 30px rgba(0,0,0,0.55);
+    }
+    .binder-cover-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(0,0,0,0.5) 100%);
+    }
+    .binder-cover-spine {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 14px;
+      background: rgba(0,0,0,0.35);
+    }
+    .binder-cover-name {
+      position: relative;
+      z-index: 1;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700;
+      font-size: 19px;
+      color: #fff;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+      line-height: 1.2;
+    }
+    .binder-cover-meta {
+      position: relative;
+      z-index: 1;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: rgba(255,255,255,0.7);
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .binder-cover-actions {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 2;
+      display: flex;
+      gap: 6px;
+    }
+    .binder-cover-actions button {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(0,0,0,0.45);
+      color: #fff;
+      font-size: 11px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .binder-cover-actions button:hover { background: rgba(0,0,0,0.75); }
+    .binder-cover-card.empty-state {
+      align-items: center;
+      justify-content: center;
+      cursor: default;
+      border-style: dashed;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+    }
+
     .binder-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 14px; }
     .creator-panel { background: var(--panel); border: 1px solid var(--border); padding: 20px; border-radius: var(--radius); margin-bottom: 30px; }
     .form-group { display: inline-flex; flex-direction: column; margin-right: 14px; margin-bottom: 10px; }
@@ -96,10 +181,15 @@
 
     .binder-slot-blank {
       cursor: default;
-      background: rgba(0,0,0,0.15);
-      border: 1px solid rgba(255,255,255,0.04);
+      background: transparent;
+      border: none;
     }
-    .binder-slot-blank:hover { transform: none; box-shadow: none; }
+    .binder-slot-blank:hover {
+      transform: none;
+      box-shadow: none;
+      border-color: transparent;
+      background: transparent;
+    }
 
     .binder-slot[draggable="true"]:active { cursor: grabbing; }
     .binder-slot[draggable="true"]:hover img { filter: brightness(1.08); }
@@ -235,18 +325,28 @@
           <label>Cover Color</label>
           <input type="color" id="b-color" value="#1c1a25" style="width: 70px; padding:2px; height:37px;" />
         </div>
+        <div class="form-group">
+          <label>Page Matting</label>
+          <input type="color" id="b-inner-color" value="#1c1a25" style="width: 70px; padding:2px; height:37px;" />
+        </div>
+        <div class="form-group">
+          <label>Grid Panel</label>
+          <input type="color" id="b-panel-color" value="#16141d" style="width: 70px; padding:2px; height:37px;" />
+        </div>
         <button class="btn btn-accent" onclick="createNewBinder()" style="height: 37px; margin-bottom: 10px;">Create Album</button>
       </div>
     </div>
 
-    <div class="binder-tab-container" id="binder-tabs"></div>
+    <div class="binder-shelf" id="binder-shelf"></div>
 
-    <hr style="border-color: var(--border); margin: 30px 0;">
+    <hr style="border-color: var(--border); margin: 30px 0; display: none;" id="active-hr">
 
     <div id="active-binder-view" style="display: none;">
       <div class="binder-header">
         <div>
+          <button class="btn" onclick="closeActiveBinder()" style="margin-bottom:10px;">&larr; All Binders</button><br>
           <h2 id="active-title" style="margin:0; font-family:'Rajdhani'; font-size:30px; display:inline-block;"></h2>
+          <button class="icon-btn" title="Edit binder" onclick="openEditBinderModal(currentBinderId)" style="width:30px; height:30px; font-size:13px; vertical-align:middle; margin-left:8px;">✎</button>
           <div id="active-meta" class="eyebrow" style="margin-top:4px;"></div>
         </div>
         
@@ -267,13 +367,48 @@
     </div>
   </div>
 
+  <div id="edit-binder-modal" class="modal" onclick="closeEditBinderModal()">
+    <div class="about-card" onclick="event.stopPropagation()" style="max-width:340px;">
+      <button class="modal-close" style="position:absolute; top:-14px; right:-14px; width:32px; height:32px; border-radius:50%; background:var(--panel); border:1px solid var(--border); font-size:18px;" onclick="closeEditBinderModal()">&times;</button>
+      <div class="eyebrow" style="color: var(--gold);">Edit Binder</div>
+      <div class="form-group" style="width:100%; margin:14px 0;">
+        <label>Name</label>
+        <input type="text" id="edit-b-name" style="width:100%;" />
+      </div>
+      <div style="display:flex; gap:16px; margin-bottom:20px; flex-wrap:wrap;">
+        <div class="form-group" style="margin:0;">
+          <label>Outer Cover</label>
+          <input type="color" id="edit-b-color" style="width: 70px; padding:2px; height:37px;" />
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Page Matting</label>
+          <input type="color" id="edit-b-inner-color" style="width: 70px; padding:2px; height:37px;" />
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Grid Panel</label>
+          <input type="color" id="edit-b-panel-color" style="width: 70px; padding:2px; height:37px;" />
+        </div>
+      </div>
+      <button class="btn btn-accent" style="width:100%;" onclick="saveEditBinder()">Save Changes</button>
+    </div>
+  </div>
+
   <div id="search-overlay" class="search-overlay">
     <div style="max-width: 1200px; margin: 0 auto;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
         <h2>Select the card to place in Slot <span id="target-slot-title"></span></h2>
         <button class="btn" onclick="closeSearchOverlay()">Close</button>
       </div>
-      <input type="text" class="search-bar" id="modal-card-search" placeholder="Type the Pokémon name..." style="max-width:100%; margin-bottom:30px;" />
+      <input type="text" class="search-bar" id="modal-card-search" placeholder="Type the Pokémon name..." style="max-width:100%; margin-bottom:10px;" />
+      <div style="display:flex; gap:10px; margin-bottom:16px;">
+        <select id="modal-rarity-select" class="search-bar" style="margin-top:0; width:auto; min-width:200px; height:41px; padding:0 14px;">
+          <option value="">-- Any Rarity --</option>
+        </select>
+        <select id="modal-type-select" class="search-bar" style="margin-top:0; width:auto; min-width:160px; height:41px; padding:0 14px;">
+          <option value="">-- Any Type --</option>
+        </select>
+      </div>
+      <div id="search-history-row" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:30px;"></div>
       <div id="modal-results-container"></div>
     </div>
   </div>
@@ -292,12 +427,67 @@
 
   <script src="app.js"></script>
   <script>
-    // Blue palette matching the binders page's fixed brand dot.
-    renderBloomLayer([
+    // Blue palette matching the binders page's fixed brand dot — restored
+    // whenever no binder is open.
+    const DEFAULT_BINDER_PALETTE = [
       { h: 217, s: 78, l: 62 },
       { h: 195, s: 70, l: 60 },
       { h: 240, s: 62, l: 50 },
-    ]);
+    ];
+    const DEFAULT_BINDER_DOT_COLOR = '#4f8bf9';
+    renderBloomLayer(DEFAULT_BINDER_PALETTE);
+
+    // Converts a hex color (e.g. "#4f8bf9") to {h, s, l}, so a binder's
+    // own colors can drive the bloom background exactly like set.html
+    // does with card artwork.
+    // Converts a hex color to an "rgba(r, g, b, alpha)" string, used to
+    // build the theme-aware hover highlight for empty slots.
+    function hexToRgba(hex, alpha) {
+      const c = (hex || '#f0b93d').replace('#', '');
+      const r = parseInt(c.substring(0, 2), 16) || 0;
+      const g = parseInt(c.substring(2, 4), 16) || 0;
+      const b = parseInt(c.substring(4, 6), 16) || 0;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function hexToHsl(hex) {
+      const c = (hex || '#4f8bf9').replace('#', '');
+      const r = parseInt(c.substring(0, 2), 16) / 255;
+      const g = parseInt(c.substring(2, 4), 16) / 255;
+      const b = parseInt(c.substring(4, 6), 16) / 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h = 0, s = 0;
+      const l = (max + min) / 2;
+      const d = max - min;
+      if (d !== 0) {
+        s = d / (1 - Math.abs(2 * l - 1));
+        switch (max) {
+          case r: h = ((g - b) / d) % 6; break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
+        }
+        h = Math.round(h * 60);
+        if (h < 0) h += 360;
+      }
+      return { h, s: Math.round(s * 100), l: Math.round(l * 100) };
+    }
+
+    // Re-themes the page bloom + brand dot to match the open binder's own
+    // cover/inner colors instead of the fixed default blue palette.
+    function applyBinderTheme(b) {
+      const coverHsl = hexToHsl(b.color);
+      const innerHsl = hexToHsl(b.inner_color || b.color);
+      const panelHsl = hexToHsl(b.panel_color || '#16141d');
+      const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+      const dotColor = `hsl(${coverHsl.h}, ${clamp(coverHsl.s + 10, 0, 100)}%, ${clamp(coverHsl.l + 8, 25, 78)}%)`;
+      document.documentElement.style.setProperty('--dot-color', dotColor);
+      renderBloomLayer([coverHsl, innerHsl, panelHsl]);
+    }
+
+    function resetBinderTheme() {
+      document.documentElement.style.setProperty('--dot-color', DEFAULT_BINDER_DOT_COLOR);
+      renderBloomLayer(DEFAULT_BINDER_PALETTE);
+    }
 
     let binders = [];
     let currentBinderId = null;
@@ -327,57 +517,139 @@
       renderActiveGrid();
     });
 
+    let editingBinderId = null;
+
     async function loadBinders() {
       binders = await api('/api/binders');
-      const tabs = document.getElementById('binder-tabs');
-      tabs.innerHTML = '';
-      
-      binders.forEach(b => {
-        const btn = document.createElement('button');
-        btn.className = 'chip' + (currentBinderId === b.id ? ' active' : '');
-        btn.style.borderLeft = `6px solid ${b.color}`;
-        btn.textContent = b.name;
-        btn.onclick = () => { selectBinder(b.id); };
-        tabs.appendChild(btn);
-      });
+      renderBinderShelf();
+    }
 
-      if(binders.length && !currentBinderId) {
-        selectBinder(binders[0].id);
+    function renderBinderShelf() {
+      const shelf = document.getElementById('binder-shelf');
+      shelf.innerHTML = '';
+      if (!binders.length) {
+        const empty = document.createElement('div');
+        empty.className = 'binder-cover-card empty-state';
+        empty.textContent = 'No binders yet — create one above!';
+        shelf.appendChild(empty);
+        return;
       }
+      binders.forEach(b => {
+        const card = document.createElement('div');
+        card.className = 'binder-cover-card';
+        card.style.background = `linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.55) 100%), ${b.color}`;
+        card.onclick = () => openBinder(b.id);
+        card.innerHTML = `
+          <div class="binder-cover-spine"></div>
+          <div class="binder-cover-actions">
+            <button title="Edit" onclick="event.stopPropagation(); openEditBinderModal(${b.id})">✎</button>
+            <button title="Delete" onclick="event.stopPropagation(); deleteBinderById(${b.id})">🗑</button>
+          </div>
+          <div class="binder-cover-name">${escapeHtml(b.name)}</div>
+          <div class="binder-cover-meta">${b.type === 'pokedex' ? 'National Pokédex' : `${b.rows}×${b.cols} grid`}</div>
+        `;
+        shelf.appendChild(card);
+      });
     }
 
     async function createNewBinder() {
       const name = document.getElementById('b-name').value.trim() || "New Binder";
       const type = document.getElementById('b-type').value;
       const color = document.getElementById('b-color').value;
+      const inner_color = document.getElementById('b-inner-color').value;
+      const panel_color = document.getElementById('b-panel-color').value;
       const rows = type === 'pokedex' ? 3 : document.getElementById('b-rows').value;
       const cols = type === 'pokedex' ? 3 : document.getElementById('b-cols').value;
 
       await api('/api/binders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, color, rows, cols, type })
+        body: JSON.stringify({ name, color, inner_color, panel_color, rows, cols, type })
       });
       document.getElementById('b-name').value = '';
       loadBinders();
     }
 
-    async function selectBinder(id, preservePage = false) {
+    // Opens a binder into the full album/reader view (was "selectBinder").
+    async function openBinder(id, preservePage = false) {
       currentBinderId = id;
       if (!preservePage) { currentPage = 1; }
-      loadBinders();
-      
+
       currentBinderData = await api(`/api/binders/${id}`);
+      document.getElementById('binder-shelf').style.display = 'none';
+      document.querySelector('.creator-panel').style.display = 'none';
       document.getElementById('active-binder-view').style.display = 'block';
       document.getElementById('active-title').textContent = currentBinderData.binder.name;
       document.getElementById('active-title').style.borderBottom = `3px solid ${currentBinderData.binder.color}`;
-      
+      applyBinderTheme(currentBinderData.binder);
+
       if(currentBinderData.binder.type === 'pokedex') {
         document.getElementById('active-meta').textContent = "National Master Collection — 1025 Total Slots (3x3 Pages)";
       } else {
         document.getElementById('active-meta').textContent = `Page Grid Format: ${currentBinderData.binder.rows}x${currentBinderData.binder.cols}`;
       }
       renderActiveGrid();
+    }
+
+    // Kept as an alias: several helpers below (drag/drop recovery, slot
+    // assignment) still call selectBinder(id, true) to refresh + stay open.
+    function selectBinder(id, preservePage = false) { return openBinder(id, preservePage); }
+
+    function closeActiveBinder() {
+      currentBinderId = null;
+      currentBinderData = null;
+      document.getElementById('active-binder-view').style.display = 'none';
+      document.getElementById('binder-shelf').style.display = 'grid';
+      document.querySelector('.creator-panel').style.display = 'block';
+      resetBinderTheme();
+      loadBinders();
+    }
+
+    function openEditBinderModal(id) {
+      const b = binders.find(x => x.id === id) || (currentBinderData && currentBinderData.binder.id === id ? currentBinderData.binder : null);
+      if (!b) return;
+      editingBinderId = id;
+      document.getElementById('edit-b-name').value = b.name;
+      document.getElementById('edit-b-color').value = b.color;
+      document.getElementById('edit-b-inner-color').value = b.inner_color || b.color;
+      document.getElementById('edit-b-panel-color').value = b.panel_color || '#16141d';
+      document.getElementById('edit-binder-modal').style.display = 'flex';
+    }
+
+    function closeEditBinderModal() {
+      document.getElementById('edit-binder-modal').style.display = 'none';
+    }
+
+    async function saveEditBinder() {
+      const name = document.getElementById('edit-b-name').value.trim();
+      const color = document.getElementById('edit-b-color').value;
+      const inner_color = document.getElementById('edit-b-inner-color').value;
+      const panel_color = document.getElementById('edit-b-panel-color').value;
+      if (!name) { alert('Name cannot be empty.'); return; }
+      try {
+        const updated = await api(`/api/binders/${editingBinderId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, color, inner_color, panel_color })
+        });
+        closeEditBinderModal();
+        if (currentBinderId === editingBinderId && currentBinderData) {
+          currentBinderData.binder = updated;
+          document.getElementById('active-title').textContent = updated.name;
+          document.getElementById('active-title').style.borderBottom = `3px solid ${updated.color}`;
+          applyBinderTheme(updated);
+          renderActiveGrid();
+        }
+        loadBinders();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function deleteBinderById(id) {
+      if (!confirm("Are you sure you want to permanently delete this binder?")) return;
+      await api(`/api/binders/${id}`, { method: 'DELETE' });
+      if (currentBinderId === id) { closeActiveBinder(); } else { loadBinders(); }
     }
 
     function handleDragStart(e) {
@@ -457,8 +729,53 @@
       }
     }
 
+    // ---------- Recent card-search history (binder slot picker) ----------
+    // Keeps the last 5 distinct name searches so they're one click away
+    // next time you're filling a binder. Stored client-side (per browser)
+    // since it's just a convenience shortcut, not account data.
+    const SEARCH_HISTORY_KEY = 'pokyudex_binder_search_history';
+    const SEARCH_HISTORY_MAX = 5;
+
+    function getSearchHistory() {
+      try {
+        const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
+        const list = raw ? JSON.parse(raw) : [];
+        return Array.isArray(list) ? list : [];
+      } catch (e) { return []; }
+    }
+
+    function addToSearchHistory(query) {
+      const q = query.trim();
+      if (q.length < 2) return;
+      let history = getSearchHistory().filter(h => h.toLowerCase() !== q.toLowerCase());
+      history.unshift(q);
+      history = history.slice(0, SEARCH_HISTORY_MAX);
+      try { localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history)); } catch (e) { /* storage unavailable, skip */ }
+      renderSearchHistory();
+    }
+
+    function renderSearchHistory() {
+      const row = document.getElementById('search-history-row');
+      const history = getSearchHistory();
+      if (!history.length) { row.innerHTML = ''; return; }
+
+      row.innerHTML = `<span style="font-family:'JetBrains Mono'; font-size:11px; color:var(--text-muted); align-self:center; margin-right:4px;">Recent:</span>`;
+      history.forEach(term => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.textContent = term;
+        chip.onclick = () => {
+          document.getElementById('modal-card-search').value = term;
+          execOverlaySearch();
+        };
+        row.appendChild(chip);
+      });
+    }
+
     async function execOverlaySearch() {
       const q = document.getElementById('modal-card-search').value.trim();
+      const rarity = document.getElementById('modal-rarity-select').value;
+      const type = document.getElementById('modal-type-select').value;
       const b = currentBinderData.binder;
       const container = document.getElementById('modal-results-container');
       
@@ -469,12 +786,16 @@
         url += `pokedex_number=${targetSlotNumber}`;
         if (q) url += `&name=${encodeURIComponent(q)}`;
       } else {
-        if (q.length < 2) {
-          container.innerHTML = '<div class="state-msg">Type at least 2 letters to search...</div>';
+        if (q.length < 2 && !rarity && !type) {
+          container.innerHTML = '<div class="state-msg">Type at least 2 letters, or pick a rarity/type, to search...</div>';
           return;
         }
-        url += `name=${encodeURIComponent(q)}`;
+        url += `name=${encodeURIComponent(q.length >= 2 ? q : '')}`;
       }
+      if (rarity) url += `&rarity=${encodeURIComponent(rarity)}`;
+      if (type) url += `&type=${encodeURIComponent(type)}`;
+
+      if (q.length >= 2) { addToSearchHistory(q); }
       
       try {
         const cards = await api(url);
@@ -517,13 +838,40 @@
       }
     }
 
+    let modalFiltersLoaded = false;
+    async function loadModalFilters() {
+      if (modalFiltersLoaded) return;
+      modalFiltersLoaded = true;
+      try {
+        const [rarities, types] = await Promise.all([api('/api/rarities'), api('/api/types')]);
+        const raritySelect = document.getElementById('modal-rarity-select');
+        rarities.forEach(r => {
+          const opt = document.createElement('option');
+          opt.value = r; opt.textContent = r;
+          raritySelect.appendChild(opt);
+        });
+        const typeSelect = document.getElementById('modal-type-select');
+        types.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t; opt.textContent = t;
+          typeSelect.appendChild(opt);
+        });
+      } catch (err) { console.error('Failed to load rarity/type filters:', err); }
+    }
+    document.getElementById('modal-rarity-select').addEventListener('change', execOverlaySearch);
+    document.getElementById('modal-type-select').addEventListener('change', execOverlaySearch);
+
     function openSearchOverlay(slotNum) {
       targetSlotNumber = slotNum;
       document.getElementById('target-slot-title').textContent = slotNum;
       document.getElementById('search-overlay').style.display = 'block';
       document.getElementById('modal-card-search').value = '';
+      document.getElementById('modal-rarity-select').value = '';
+      document.getElementById('modal-type-select').value = '';
       document.getElementById('modal-results-container').innerHTML = '';
       document.getElementById('modal-card-search').focus();
+      renderSearchHistory();
+      loadModalFilters();
       
       const b = currentBinderData.binder;
       if (b && b.type === 'pokedex') {
@@ -545,6 +893,12 @@
     function createBlankPageHTML(slotsCount, b, isBookMode) {
       const grid = document.createElement('div');
       grid.className = 'binder-grid';
+      // Fully transparent: shows the album's own background straight
+      // through, guaranteeing a perfect (not just similar) color match
+      // instead of trying to replicate its gradient separately.
+      grid.style.background = 'transparent';
+      grid.style.border = 'none';
+      grid.style.boxShadow = 'none';
       const slotWidth = isBookMode ? '170px' : '180px';
       grid.style.margin = '0';
       grid.style.gridTemplateColumns = `repeat(${b.cols}, ${slotWidth})`;
@@ -560,6 +914,7 @@
     function createGridHTML(startSlot, slotsCount, b, slots, isBookMode) {
       const grid = document.createElement('div');
       grid.className = 'binder-grid';
+      grid.style.background = b.panel_color || '#16141d';
       
       const slotWidth = isBookMode ? '170px' : '180px';
       grid.style.margin = isBookMode ? '0' : '24px auto';
@@ -628,8 +983,20 @@
       const slotsPerPage = b.rows * b.cols;
       wrapper.innerHTML = '';
 
+      // Empty-slot hover highlight follows this binder's own inner color
+      // instead of the fixed gold accent (see .binder-slot:hover in
+      // style.css, which reads these variables with a gold fallback).
+      const accentHex = b.inner_color || b.color;
+      wrapper.style.setProperty('--binder-accent', accentHex);
+      wrapper.style.setProperty('--binder-accent-bg', hexToRgba(accentHex, 0.08));
+      wrapper.style.setProperty('--binder-accent-glow', hexToRgba(accentHex, 0.28));
+
       // BACKGROUND GRADIENT COMBINATION FOR THE REACTIVE LEATHERETTE LOOK
-      const albumBackground = `linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0.55) 100%), ${b.color}`;
+      // inner_color is the "page matting" around the grid; panel_color
+      // (used inside createGridHTML/createBlankPageHTML) is the grid
+      // itself — the two are intentionally independent so they can
+      // contrast with each other.
+      const albumBackground = `linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0.55) 100%), ${b.inner_color || b.color}`;
       const albumBoxShadow = `0 35px 80px rgba(0, 0, 0, 0.85), inset 0 0 40px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04)`;
       const albumBorder = `6px solid rgba(255, 255, 255, 0.08)`;
 
@@ -671,10 +1038,6 @@
         if (isCoverSpread) {
           const blankContainer = document.createElement('div');
           blankContainer.className = 'binder-page-side';
-          const blankBadge = document.createElement('div');
-          blankBadge.className = 'page-title-badge';
-          blankBadge.textContent = 'INSIDE COVER';
-          blankContainer.appendChild(blankBadge);
           blankContainer.appendChild(createBlankPageHTML(slotsPerPage, b, true));
           bookSpread.appendChild(blankContainer);
 
@@ -801,4 +1164,4 @@
     requireAuth().then(user => { if (user) loadBinders(); });
   </script>
 </body>
-</html>z
+</html>
