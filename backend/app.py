@@ -90,8 +90,6 @@ def admin_required(view_func):
     return wrapped
 
 
-# ---------- UTILITY: Endpoint per il Caricamento File dal Dispositivo ----------
-# MODIFICA: Accetta anche GET per evitare il blocco 405 nativo e restituire un errore JSON pulito
 @app.route("/api/upload", methods=["GET", "POST"])
 @login_required
 def api_upload_file():
@@ -648,6 +646,36 @@ def api_wishlist_boards():
         return jsonify([dict(r) for r in rows])
 
 
+# MODIFICA: Nuova rotta POST asincrona per salvare la sequenza di ordinamento delle bacheche
+@app.route("/api/wishlist/boards/reorder", methods=["POST"])
+@login_required
+def api_reorder_wishlist_boards():
+    data = request.json or {}
+    board_ids = data.get("board_ids")
+    if not isinstance(board_ids, list):
+        return jsonify({"error": "board_ids must be a list"}), 400
+    with db.get_conn() as conn:
+        db.reorder_wishlist_boards(conn, session["user_id"], board_ids)
+    return jsonify({"success": True})
+
+
+# MODIFICA: Nuova rotta POST asincrona per salvare la sequenza di ordinamento delle carte dentro la singola bacheca
+@app.route("/api/wishlist/boards/<int:board_id>/cards/reorder", methods=["POST"])
+@login_required
+def api_reorder_board_cards(board_id):
+    user_id = session["user_id"]
+    data = request.json or {}
+    card_ids = data.get("card_ids")
+    if not isinstance(card_ids, list):
+        return jsonify({"error": "card_ids must be a list"}), 400
+    with db.get_conn() as conn:
+        board = db.get_wishlist_board(conn, board_id, user_id)
+        if not board:
+            return jsonify({"error": "Bacheca non trovata"}), 404
+        db.reorder_board_cards(conn, board_id, card_ids)
+    return jsonify({"success": True})
+
+
 @app.route("/api/wishlist/boards/<int:board_id>", methods=["GET", "PATCH", "DELETE"])
 @login_required
 def api_wishlist_board_single(board_id):
@@ -711,6 +739,7 @@ def api_wishlist_board_remove_card(board_id, card_id):
         db.remove_card_from_board(conn, board_id, card_id)
         return jsonify({"success": True})
 
+
 @app.route("/api/sets/toggle-favorite", methods=["POST"])
 @login_required
 def api_toggle_set_favorite():
@@ -769,7 +798,6 @@ def api_manage_binders():
         return jsonify([dict(r) for r in rows])
 
 
-# MODIFICA: Accetta esplicitamente anche POST per prevenire errori 405 se l'ambiente inoltra la richiesta sul segmento base
 @app.route("/api/binders/<int:binder_id>", methods=["GET", "POST", "PATCH", "DELETE"])
 @login_required
 def api_single_binder(binder_id):
@@ -813,7 +841,6 @@ def api_single_binder(binder_id):
         return jsonify({"binder": dict(b), "slots": {s["slot_number"]: dict(s) for s in slots}})
 
 
-# MODIFICA: Accetta esplicitamente anche GET per intercettare letture anomale e restituire lo stato degli slot in sicurezza senza 405
 @app.route("/api/binders/<int:binder_id>/slots", methods=["GET", "POST"])
 @login_required
 def api_assign_slot(binder_id):

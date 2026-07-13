@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS wishlist_boards (
 CREATE TABLE IF NOT EXISTS wishlist_board_cards (
     board_id INTEGER NOT NULL,
     card_id TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
     PRIMARY KEY (board_id, card_id),
     FOREIGN KEY (board_id) REFERENCES wishlist_boards (id),
     FOREIGN KEY (card_id) REFERENCES cards (id)
@@ -144,10 +145,7 @@ def _column_exists(conn, table: str, column: str) -> bool:
 
 
 def _migrate_to_multiuser(conn):
-    """Upgrades a database created BEFORE the multi-user system to the new
-    schema, without losing data: the old global tables are renamed to
-    '<name>_legacy' and wait for the first registered user to 'claim'
-    them (see claim_legacy_data)."""
+    """Upgrades a database created BEFORE the multi-user system to the new."""
     for table, id_col in (("collection", "card_id"), ("wishlist", "card_id"), ("favorite_sets", "set_id")):
         if _table_exists(conn, table) and not _column_exists(conn, table, "user_id"):
             legacy_name = f"{table}_legacy"
@@ -155,7 +153,6 @@ def _migrate_to_multiuser(conn):
                 conn.execute(f"ALTER TABLE {table} RENAME TO {legacy_name}")
                 print(f"[Database] Pre-existing data from '{table}' preserved in '{legacy_name}', waiting for an account.")
             else:
-                # rare case: both the old table and a _legacy one already exist
                 conn.execute(f"DROP TABLE {table}")
             conn.execute(f"""
                 CREATE TABLE {table} (
@@ -174,10 +171,8 @@ def _migrate_to_multiuser(conn):
 
 def init_db():
     with get_conn() as conn:
-        # 1. Set up the tables' structural schema
         conn.executescript(SCHEMA)
 
-        # 2. Migration for the Pokédex number column on cards
         try:
             conn.execute("ALTER TABLE cards ADD COLUMN national_dex INTEGER")
         except sqlite3.OperationalError:
@@ -188,52 +183,43 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
-        # 2b. Migration for the elemental types column on cards
         if not _column_exists(conn, "cards", "types"):
             conn.execute("ALTER TABLE cards ADD COLUMN types TEXT")
 
-        # 3. Add the type column to binders if missing
         try:
             conn.execute("ALTER TABLE binders ADD COLUMN type TEXT DEFAULT 'custom'")
         except sqlite3.OperationalError:
             pass
         conn.execute("UPDATE binders SET type = 'custom' WHERE type IS NULL OR type = ''")
 
-        # 3b. Add inner_color to binders (the "page/matting" color around
-        # the grid, defaults to the existing cover color).
         if not _column_exists(conn, "binders", "inner_color"):
             conn.execute("ALTER TABLE binders ADD COLUMN inner_color TEXT")
         conn.execute("UPDATE binders SET inner_color = color WHERE inner_color IS NULL OR inner_color = ''")
 
-        # 3c. Add sort_order to favorite_sets for drag-and-drop reordering
         if _table_exists(conn, "favorite_sets") and not _column_exists(conn, "favorite_sets", "sort_order"):
             conn.execute("ALTER TABLE favorite_sets ADD COLUMN sort_order INTEGER DEFAULT 0")
 
-        # 3d. Add panel_color to binders (the grid/slot panel background,
-        # independent from the surrounding page/matting color).
         if not _column_exists(conn, "binders", "panel_color"):
             conn.execute("ALTER TABLE binders ADD COLUMN panel_color TEXT")
         conn.execute("UPDATE binders SET panel_color = '#16141d' WHERE panel_color IS NULL OR panel_color = ''")
 
-        # Migrazione per immagini personalizzate e slot estesi nei Binders
         if _table_exists(conn, "binder_slots") and not _column_exists(conn, "binder_slots", "custom_image_url"):
             conn.execute("ALTER TABLE binder_slots ADD COLUMN custom_image_url TEXT")
         if _table_exists(conn, "binder_slots") and not _column_exists(conn, "binder_slots", "slot_span"):
             conn.execute("ALTER TABLE binder_slots ADD COLUMN slot_span INTEGER DEFAULT 1")
 
-        # 4. Migration to the multi-user schema (preserves pre-existing data)
+        if _table_exists(conn, "wishlist_board_cards") and not _column_exists(conn, "wishlist_board_cards", "sort_order"):
+            conn.execute("ALTER TABLE wishlist_board_cards ADD COLUMN sort_order INTEGER DEFAULT 0")
+
         _migrate_to_multiuser(conn)
 
-        # 4b. Add the username column for databases created before it existed.
         if not _column_exists(conn, "users", "username"):
             conn.execute("ALTER TABLE users ADD COLUMN username TEXT")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
         
-        # 4c. Add avatar_pokemon_id to users
         if not _column_exists(conn, "users", "avatar_pokemon_id"):
             conn.execute("ALTER TABLE users ADD COLUMN avatar_pokemon_id INTEGER")
 
-        # 5. Reset sync if the Pokédex index is empty
         check = conn.execute("SELECT COUNT(*) AS c FROM cards WHERE national_dex IS NOT NULL").fetchone()
         if check and check["c"] == 0:
             count = conn.execute("SELECT COUNT(*) AS c FROM cards").fetchone()
@@ -275,7 +261,6 @@ def count_users(conn) -> int:
 
 
 def claim_legacy_data(conn, user_id: int):
-    """Assigns to the new user all the data created before the multi-user."""
     for table, id_col in (("collection", "card_id"), ("wishlist", "card_id"), ("favorite_sets", "set_id")):
         legacy_name = f"{table}_legacy"
         if _table_exists(conn, legacy_name):
@@ -566,7 +551,6 @@ def delete_binder(conn, binder_id: int, user_id: int):
     conn.execute("DELETE FROM binders WHERE id = ? AND user_id = ?", (binder_id, user_id))
 
 
-# MODIFICA: Utilizza il LEFT JOIN così da caricare gli slot custom privi di card_id associato
 def get_binder_slots(conn, binder_id: int):
     return conn.execute(
         """SELECT binder_slots.*, cards.name, cards.image_small, cards.image_large, cards.price_market, cards.currency
@@ -577,7 +561,6 @@ def get_binder_slots(conn, binder_id: int):
     ).fetchall()
 
 
-# MODIFICA: Esteso l'upsert per accettare custom_image_url e lo span di larghezza
 def set_binder_slot(conn, binder_id: int, slot_number: int, card_id: str | None, custom_image_url: str | None = None, slot_span: int = 1):
     conn.execute("DELETE FROM binder_slots WHERE binder_id = ? AND slot_number = ?", (binder_id, slot_number))
     if card_id or custom_image_url:
@@ -588,6 +571,7 @@ def set_binder_slot(conn, binder_id: int, slot_number: int, card_id: str | None,
 
 # ---------- Bacheche personalizzate della wishlist ----------
 
+# MODIFICA CORRETTIVA: Rimosso il filtro NOT EXISTS per fare in modo che mostri TUTTE le carte inserite in wishlist, consentendo la duplicazione su bacheche multiple
 def get_uncategorized_wishlist(conn, user_id: int):
     return conn.execute(
         """SELECT cards.*, sets.name AS set_name, sets.release_date
@@ -595,13 +579,8 @@ def get_uncategorized_wishlist(conn, user_id: int):
            JOIN cards ON wishlist.card_id = cards.id
            JOIN sets ON cards.set_id = sets.id
            WHERE wishlist.user_id = ?
-             AND NOT EXISTS (
-               SELECT 1 FROM wishlist_board_cards wbc
-               JOIN wishlist_boards wb ON wbc.board_id = wb.id
-               WHERE wbc.card_id = cards.id AND wb.user_id = ?
-             )
            ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC""",
-        (user_id, user_id),
+        (user_id,),
     ).fetchall()
 
 
@@ -630,6 +609,22 @@ def create_wishlist_board(conn, user_id: int, name: str, color: str):
         (user_id, name, color, next_order)
     )
     return cursor.lastrowid
+
+
+def reorder_wishlist_boards(conn, user_id: int, board_ids: list):
+    for idx, board_id in enumerate(board_ids):
+        conn.execute(
+            "UPDATE wishlist_boards SET sort_order = ? WHERE user_id = ? AND id = ?",
+            (idx, user_id, board_id),
+        )
+
+
+def reorder_board_cards(conn, board_id: int, card_ids: list):
+    for idx, card_id in enumerate(card_ids):
+        conn.execute(
+            "UPDATE wishlist_board_cards SET sort_order = ? WHERE board_id = ? AND card_id = ?",
+            (idx, board_id, card_id),
+        )
 
 
 def update_wishlist_board(conn, board_id: int, user_id: int, name=None, color=None):
@@ -663,13 +658,19 @@ def get_wishlist_board_cards(conn, board_id: int):
            JOIN cards ON wbc.card_id = cards.id
            JOIN sets ON cards.set_id = sets.id
            WHERE wbc.board_id = ?
-           ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC""",
+           ORDER BY wbc.sort_order ASC, sets.release_date DESC""",
         (board_id,)
     ).fetchall()
 
 
 def add_card_to_board(conn, board_id: int, card_id: str):
-    conn.execute("INSERT OR IGNORE INTO wishlist_board_cards (board_id, card_id) VALUES (?, ?)", (board_id, card_id))
+    next_order = conn.execute(
+        "SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM wishlist_board_cards WHERE board_id = ?", (board_id,)
+    ).fetchone()["n"]
+    conn.execute(
+        "INSERT OR IGNORE INTO wishlist_board_cards (board_id, card_id, sort_order) VALUES (?, ?, ?)",
+        (board_id, card_id, next_order)
+    )
 
 
 def remove_card_from_board(conn, board_id: int, card_id: str):
