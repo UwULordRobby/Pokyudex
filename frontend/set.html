@@ -65,6 +65,7 @@
     const setId = params.get('id');
     let allCards = [];
     let activeRarity = null;
+    let usdToEurRate = 0.92;
 
     const RARITY_ORDER = [
       "Common", "Uncommon", "Promo", "Classic Collection", "Rare", "Rare Holo", "Rare BREAK",
@@ -80,12 +81,13 @@
       throw new Error('missing set id');
     }
 
-    // ---------- Per-set page theme: bloom background + brand dot color ----------
+    async function loadExchangeRate() {
+      try {
+        const data = await api('/api/exchange-rate');
+        usdToEurRate = data.usd_to_eur;
+      } catch (err) { console.error('Impossibile caricare il tasso di cambio:', err); }
+    }
 
-    // Deterministic fallback color, derived from the set id, used whenever
-    // the dominant-color extraction below isn't possible (missing image,
-    // CORS-tainted canvas, etc). Guarantees every set still gets a stable,
-    // unique-ish theme rather than falling back to a flat default.
     function hashHue(str) {
       let hash = 0;
       for (let i = 0; i < str.length; i++) {
@@ -115,11 +117,10 @@
 
     const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
-    // Places up to 4 patches — one per dominant color actually found in
-    // the card artwork — via the shared renderBloomLayer() in app.js.
-    // Also sets --dot-color, so the brand dot picks up the primary tone
-    // (this page is the one exception to the fixed per-section dot
-    // colors: it always follows the card).
+    if (typeof closeModal === 'undefined') {
+      window.closeModal = function() { document.getElementById('card-modal').style.display = "none"; }
+    }
+
     function applyPageTheme(palette) {
       const primary = palette[0];
       const dotColor = `hsl(${primary.h}, ${clamp(primary.s + 10, 0, 100)}%, ${clamp(primary.l + 8, 25, 78)}%)`;
@@ -127,13 +128,6 @@
       renderBloomLayer(palette);
     }
 
-    // Reads the card image into a small canvas and builds a simple color
-    // histogram (RGB values bucketed into coarse "buckets" of 24) so we
-    // can pick the 3-4 most frequent, visually distinct colors — instead
-    // of a single flat average, which tends to muddy multi-color
-    // artwork into one grayish-purple blob. Rejects if the image is
-    // missing, fails to load, or the canvas gets tainted by a
-    // cross-origin image without CORS headers.
     function extractPalette(imgUrl, count = 4) {
       return new Promise((resolve, reject) => {
         if (!imgUrl) { reject(new Error('no image')); return; }
@@ -154,8 +148,6 @@
             for (let i = 0; i < data.length; i += 4) {
               const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
               if (a < 200) continue;
-              // Skip near-white/near-black pixels: usually the card
-              // border or a flat background, not the artwork itself.
               const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
               if (luminance > 245 || luminance < 12) continue;
 
@@ -174,9 +166,6 @@
                 Math.round(bucket.g / bucket.count),
                 Math.round(bucket.b / bucket.count)
               );
-              // Skip colors too close to one already picked, so the
-              // palette reads as genuinely varied rather than 4 shades
-              // of the same tone.
               const tooClose = palette.some(p => Math.abs(p.h - color.h) < 18 && Math.abs(p.l - color.l) < 12);
               if (!tooClose) palette.push(color);
               if (palette.length >= count) break;
@@ -184,7 +173,7 @@
             if (!palette.length) { reject(new Error('no distinct colors')); return; }
             resolve(palette);
           } catch (e) {
-            reject(e); // canvas tainted by CORS
+            reject(e);
           }
         };
         img.onerror = () => reject(new Error('image failed to load'));
@@ -201,7 +190,13 @@
       ];
       if (!cards || !cards.length) { applyPageTheme(fallbackPalette); return; }
 
-      const priciest = [...cards].sort((a, b) => (b.price_market ?? -1) - (a.price_market ?? -1))[0];
+      const priciest = [...cards].sort((a, b) => {
+        const getPriceInEur = (card) => {
+          if (card.price_market == null) return -1;
+          return card.currency === 'USD' ? card.price_market * usdToEurRate : card.price_market;
+        };
+        return getPriceInEur(b) - getPriceInEur(a);
+      })[0];
       const imgUrl = priciest && (priciest.image_large || priciest.image_small);
 
       try {
@@ -232,11 +227,17 @@
 
     function sortCards(cardsArray, criteria) {
       return [...cardsArray].sort((a, b) => {
+        // Riconverte ed allinea i prezzi in EUR prima di eseguire i controlli di ordinamento
+        const getPriceInEur = (card) => {
+          if (card.price_market == null) return null;
+          return card.currency === 'USD' ? card.price_market * usdToEurRate : card.price_market;
+        };
+
         if (criteria === 'price_desc') {
-          return (b.price_market ?? -1) - (a.price_market ?? -1);
+          return (getPriceInEur(b) ?? -1) - (getPriceInEur(a) ?? -1);
         }
         if (criteria === 'price_asc') {
-          return (a.price_market ?? Infinity) - (b.price_market ?? Infinity);
+          return (getPriceInEur(a) ?? Infinity) - (getPriceInEur(b) ?? Infinity);
         }
         if (criteria === 'rarity_desc') {
           let idxA = RARITY_ORDER.findIndex(r => r.toLowerCase() === (a.rarity || "").toLowerCase());
@@ -270,7 +271,15 @@
       const grid = document.createElement('div');
       grid.className = 'cards-grid';
       filtered.forEach((c) => {
-        const priceLabel = formatPrice(c.price_market, c.currency);
+        // Conversione al volo in EUR per i cartellini singoli se la valuta nativa della carta è USD
+        let targetPrice = c.price_market;
+        let targetCurrency = c.currency;
+        if (targetPrice !== null && targetCurrency === 'USD') {
+          targetPrice = targetPrice * usdToEurRate;
+          targetCurrency = 'EUR';
+        }
+
+        const priceLabel = formatPrice(targetPrice, targetCurrency);
         const tile = document.createElement('div');
         tile.className = 'card-tile';
         const bigImgUrl = c.image_large || c.image_small || '';
@@ -297,7 +306,6 @@
       document.getElementById('card-modal').style.display = "flex";
       document.getElementById('modal-img').src = imgUrl;
     }
-    function closeModal() { document.getElementById('card-modal').style.display = "none"; }
 
     function populateTypeSelect(cards) {
       const select = document.getElementById('type-select');
@@ -343,7 +351,6 @@
 
     document.getElementById('sort-select').addEventListener('change', renderCards);
     document.getElementById('type-select').addEventListener('change', renderCards);
-
     document.getElementById('about-btn').addEventListener('click', showAboutModal);
 
     async function toggleOwn(cardId, btn) {
@@ -368,7 +375,12 @@
       } catch (err) { alert(err.message); }
     }
 
-    requireAuth().then(user => { if (user) loadCards(); });
+    requireAuth().then(async user => { 
+      if (user) { 
+        await loadExchangeRate();
+        loadCards(); 
+      } 
+    });
   </script>
 </body>
 </html>

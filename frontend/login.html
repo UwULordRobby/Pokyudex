@@ -144,9 +144,11 @@
         passwordInput.setAttribute('autocomplete', 'current-password');
         confirmField.style.display = 'none';
         confirmInput.required = false;
+        confirmInput.disabled = true;
         passwordHint.style.display = 'none';
         usernameField.style.display = 'none';
         usernameInput.required = false;
+        usernameInput.disabled = true;
       } else {
         submitBtn.textContent = 'Create Account';
         switchText.textContent = 'Already have an account?';
@@ -154,9 +156,11 @@
         passwordInput.setAttribute('autocomplete', 'new-password');
         confirmField.style.display = 'block';
         confirmInput.required = true;
+        confirmInput.disabled = false;
         passwordHint.style.display = 'block';
         usernameField.style.display = 'block';
         usernameInput.required = true;
+        usernameInput.disabled = false;
       }
     }
 
@@ -202,6 +206,9 @@
         submitBtn.disabled = false;
       }
     });
+
+    // Forza lo stato di login corretto all'avvio pulendo i vincoli HTML5 dei campi nascosti
+    setMode('login');
 
     // If already logged in, skip straight to the home page.
     (async () => {

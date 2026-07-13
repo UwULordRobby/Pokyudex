@@ -20,6 +20,24 @@
     #favorites-container .set-tile { cursor: grab; }
     #favorites-container .set-tile.dragging { opacity: 0.4; }
     #favorites-container .set-tile.drag-over { border-color: var(--gold); box-shadow: 0 0 15px rgba(240, 185, 61, 0.35); }
+    
+    /* Stili per il separatore delle Ere */
+    .era-separator-header {
+      margin: 40px 0 16px 0;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      display: flex;
+      align-items: center;
+    }
+    .era-separator-title {
+      margin: 0;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
   </style>
 </head>
 <body>
@@ -241,28 +259,68 @@
       }, 400);
     }
 
+    // MODIFICA: Funzione aggiornata per suddividere i set in base all'Era (series)
     function renderSetsGrid(sets, container) {
       if (!sets.length) {
         container.innerHTML = '<div class="state-msg">No sets found.</div>';
         return;
       }
-      const grid = document.createElement('div');
-      grid.className = 'sets-grid';
-      sets.forEach((s) => {
-        const tile = document.createElement('div');
-        tile.className = 'set-tile';
-        tile.style.position = 'relative';
-        tile.onclick = () => { window.location.href = `set.html?id=${encodeURIComponent(s.id)}`; };
-        tile.innerHTML = `
-          <button class="collect-btn ${s.is_favorite ? 'owned' : ''}" style="top: 8px; right: 8px; left: auto; font-size:14px;" onclick="event.stopPropagation(); toggleFavoriteSet('${s.id}', this)">★</button>
-          ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
-          <div class="set-name">${escapeHtml(s.name)}</div>
-          <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
-        `;
-        grid.appendChild(tile);
-      });
+      
       container.innerHTML = '';
-      container.appendChild(grid);
+
+      // Raggruppa i set per serie/era preservando l'ordine cronologico con cui appaiono
+      const groups = {};
+      const eraOrder = [];
+
+      sets.forEach((s) => {
+        let era = s.series || 'Other';
+        // Rinomina esteticamente l'era XY per riflettere le Mega Evoluzioni come richiesto
+        if (era.toLowerCase() === 'xy') {
+          era = 'XY / Mega Evolution';
+        }
+        
+        if (!groups[era]) {
+          groups[era] = [];
+          eraOrder.push(era);
+        }
+        groups[era].push(s);
+      });
+
+      // Genera la struttura HTML per ciascuna Era trovata
+      eraOrder.forEach((era) => {
+        // Separatore Visivo dell'Era
+        const separator = document.createElement('div');
+        separator.className = 'era-separator-header';
+        
+        const title = document.createElement('h3');
+        title.className = 'era-separator-title';
+        title.textContent = era;
+        
+        separator.appendChild(title);
+        container.appendChild(separator);
+
+        // Griglia dei set associati a questa specifica era
+        const grid = document.createElement('div');
+        grid.className = 'sets-grid';
+        grid.style.marginTop = '12px';
+        grid.style.marginBottom = '28px';
+
+        groups[era].forEach((s) => {
+          const tile = document.createElement('div');
+          tile.className = 'set-tile';
+          tile.style.position = 'relative';
+          tile.onclick = () => { window.location.href = `set.html?id=${encodeURIComponent(s.id)}`; };
+          tile.innerHTML = `
+            <button class="collect-btn ${s.is_favorite ? 'owned' : ''}" style="top: 8px; right: 8px; left: auto; font-size:14px;" onclick="event.stopPropagation(); toggleFavoriteSet('${s.id}', this)">★</button>
+            ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
+            <div class="set-name">${escapeHtml(s.name)}</div>
+            <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+          `;
+          grid.appendChild(tile);
+        });
+
+        container.appendChild(grid);
+      });
     }
 
     async function loadSets() {
@@ -281,11 +339,6 @@
     document.getElementById('about-btn').addEventListener('click', showAboutModal);
 
     // ---------- Admin: forced resync of every set ----------
-    // Only visible to the admin user (user id 1). Kicks off a background
-    // job that re-downloads every set from the Pokémon TCG API, ignoring
-    // last_synced, and polls /api/admin/resync-status until it's done —
-    // handy right after a data/schema change (e.g. the new type filter)
-    // to see it reflected without waiting for the weekly auto-refresh.
     function initAdminResync(user) {
       const btn = document.getElementById('admin-resync-btn');
       if (!user || !user.is_admin) return;
@@ -329,7 +382,6 @@
         }
       });
 
-      // In case a resync was already running (e.g. page reload mid-sync)
       pollStatus();
     }
 
@@ -472,12 +524,9 @@
     document.getElementById('sort-cards-select').addEventListener('change', renderGlobalCards);
     document.getElementById('card-name-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchCardsGlobal(); });
 
-    function openModal(imgUrl) {
-      if (!imgUrl) return;
-      document.getElementById('card-modal').style.display = "flex";
-      document.getElementById('modal-img').src = imgUrl;
+    if (typeof closeModal === 'undefined') {
+      window.closeModal = function() { document.getElementById('card-modal').style.display = "none"; }
     }
-    function closeModal() { document.getElementById('card-modal').style.display = "none"; }
 
     async function toggleOwn(cardId, btn) {
       try {

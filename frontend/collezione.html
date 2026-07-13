@@ -46,10 +46,6 @@
         <div class="eyebrow" style="margin:0;">Estimated Value (EUR)</div>
         <div class="stat-val" id="total-val-eur">0.00 €</div>
       </div>
-      <div class="stat-card">
-        <div class="eyebrow" style="margin:0;">Estimated Value (USD)</div>
-        <div class="stat-val" id="total-val-usd">$0.00</div>
-      </div>
     </div>
 
     <div class="controls-row">
@@ -83,6 +79,7 @@
     ]);
 
     let collection = [];
+    let usdToEurRate = 0.92;
 
     const RARITY_ORDER = [
       "Common", "Uncommon", "Promo", "Classic Collection", "Rare", "Rare Holo", "Rare BREAK",
@@ -93,26 +90,38 @@
       "ACE SPEC Rare", "Black White Rare", "Rare Secret", "Secret Rare", "Rare Rainbow", "Hyper Rare"
     ];
 
+    async function loadExchangeRate() {
+      try {
+        const data = await api('/api/exchange-rate');
+        usdToEurRate = data.usd_to_eur;
+      } catch (err) { console.error('Impossibile caricare il tasso di cambio:', err); }
+    }
+
     function calculateStats(cards) {
       document.getElementById('total-cards').textContent = cards.length;
-      let eur = 0, usd = 0;
+      let totalEur = 0;
       cards.forEach(c => {
         if (c.price_market) {
-          if (c.currency === 'EUR') eur += c.price_market;
-          else if (c.currency === 'USD') usd += c.price_market;
+          if (c.currency === 'EUR') totalEur += c.price_market;
+          else if (c.currency === 'USD') totalEur += c.price_market * usdToEurRate;
         }
       });
-      document.getElementById('total-val-eur').textContent = eur.toFixed(2) + ' €';
-      document.getElementById('total-val-usd').textContent = '$' + usd.toFixed(2);
+      document.getElementById('total-val-eur').textContent = totalEur.toFixed(2) + ' €';
     }
 
     function sortCards(cardsArray, criteria) {
       return [...cardsArray].sort((a, b) => {
+        // Uniforma i prezzi in EUR prima del confronto per garantire un ordinamento corretto delle carte in dollari
+        const getPriceInEur = (card) => {
+          if (card.price_market == null) return null;
+          return card.currency === 'USD' ? card.price_market * usdToEurRate : card.price_market;
+        };
+
         if (criteria === 'price_desc') {
-          return (b.price_market ?? -1) - (a.price_market ?? -1);
+          return (getPriceInEur(b) ?? -1) - (getPriceInEur(a) ?? -1);
         }
         if (criteria === 'price_asc') {
-          return (a.price_market ?? Infinity) - (b.price_market ?? Infinity);
+          return (getPriceInEur(a) ?? Infinity) - (getPriceInEur(b) ?? Infinity);
         }
         if (criteria === 'rarity_desc') {
           let idxA = RARITY_ORDER.findIndex(r => r.toLowerCase() === (a.rarity || "").toLowerCase());
@@ -147,7 +156,15 @@
       const grid = document.createElement('div');
       grid.className = 'cards-grid';
       sorted.forEach((c) => {
-        const priceLabel = formatPrice(c.price_market, c.currency);
+        // Conversione al volo in EUR per i cartellini singoli se la valuta nativa è USD
+        let targetPrice = c.price_market;
+        let targetCurrency = c.currency;
+        if (targetPrice !== null && targetCurrency === 'USD') {
+          targetPrice = targetPrice * usdToEurRate;
+          targetCurrency = 'EUR';
+        }
+        
+        const priceLabel = formatPrice(targetPrice, targetCurrency);
         const tile = document.createElement('div');
         tile.className = 'card-tile';
         const bigImgUrl = c.image_large || c.image_small || '';
@@ -201,7 +218,12 @@
     }
     function closeModal() { document.getElementById('card-modal').style.display = "none"; }
 
-    requireAuth().then(user => { if (user) loadCollection(); });
+    requireAuth().then(async user => { 
+      if (user) { 
+        await loadExchangeRate();
+        loadCollection(); 
+      } 
+    });
   </script>
 </body>
 </html>
