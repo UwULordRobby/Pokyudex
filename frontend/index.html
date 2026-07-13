@@ -121,8 +121,6 @@
 
   <script src="app.js"></script>
   <script>
-    // Soft, low-saturation "ivory" palette matching the home page's
-    // white brand dot — a pearlescent glow rather than a colorful one.
     renderBloomLayer([
       { h: 42,  s: 30, l: 88 },
       { h: 0,   s: 0,  l: 96 },
@@ -130,7 +128,7 @@
     ]);
 
     let allSets = [];
-    let globalSearchResults = []; // Caches loaded results so they can be sorted on the fly
+    let globalSearchResults = []; 
     let raritiesLoaded = false;
     let typesLoaded = false;
 
@@ -173,9 +171,6 @@
       renderSetsGrid(filteredSets, document.getElementById('sets-container'));
     }
 
-    // Favorites grid: same tiles as renderSetsGrid, but draggable so the
-    // person can reorder them by preference instead of release date.
-    // The new order is persisted via /api/sets/favorites/reorder.
     function renderFavoritesGrid(sets, container) {
       if (!sets.length) { container.innerHTML = ''; return; }
       const grid = document.createElement('div');
@@ -259,7 +254,6 @@
       }, 400);
     }
 
-    // MODIFICA: Funzione aggiornata per suddividere i set in base all'Era (series)
     function renderSetsGrid(sets, container) {
       if (!sets.length) {
         container.innerHTML = '<div class="state-msg">No sets found.</div>';
@@ -268,13 +262,11 @@
       
       container.innerHTML = '';
 
-      // Raggruppa i set per serie/era preservando l'ordine cronologico con cui appaiono
       const groups = {};
       const eraOrder = [];
 
       sets.forEach((s) => {
         let era = s.series || 'Other';
-        // Rinomina esteticamente l'era XY per riflettere le Mega Evoluzioni come richiesto
         if (era.toLowerCase() === 'xy') {
           era = 'XY / Mega Evolution';
         }
@@ -286,9 +278,7 @@
         groups[era].push(s);
       });
 
-      // Genera la struttura HTML per ciascuna Era trovata
       eraOrder.forEach((era) => {
-        // Separatore Visivo dell'Era
         const separator = document.createElement('div');
         separator.className = 'era-separator-header';
         
@@ -299,7 +289,6 @@
         separator.appendChild(title);
         container.appendChild(separator);
 
-        // Griglia dei set associati a questa specifica era
         const grid = document.createElement('div');
         grid.className = 'sets-grid';
         grid.style.marginTop = '12px';
@@ -338,7 +327,6 @@
 
     document.getElementById('about-btn').addEventListener('click', showAboutModal);
 
-    // ---------- Admin: forced resync of every set ----------
     function initAdminResync(user) {
       const btn = document.getElementById('admin-resync-btn');
       if (!user || !user.is_admin) return;
@@ -524,10 +512,6 @@
     document.getElementById('sort-cards-select').addEventListener('change', renderGlobalCards);
     document.getElementById('card-name-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchCardsGlobal(); });
 
-    if (typeof closeModal === 'undefined') {
-      window.closeModal = function() { document.getElementById('card-modal').style.display = "none"; }
-    }
-
     async function toggleOwn(cardId, btn) {
       try {
         const res = await api('/api/collection/toggle', {
@@ -563,6 +547,18 @@
         renderSetsPage();
       } catch (err) { alert(err.message); }
     }
+
+    /* FUNZIONI DI INGRANDIMENTO RIPRISTINATE CORRETTAMENTE */
+    function openModal(imgUrl) {
+      if (!imgUrl) return;
+      document.getElementById('card-modal').style.display = "flex";
+      document.getElementById('modal-img').src = imgUrl;
+    }
+    
+    function closeModal() {
+      document.getElementById('card-modal').style.display = "none";
+    }
+    window.closeModal = closeModal;
 
     requireAuth().then(user => {
       if (user) {

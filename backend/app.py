@@ -4,6 +4,7 @@ import threading
 import time
 from functools import wraps
 from pathlib import Path
+import uuid
 from config import USD_TO_EUR_RATE
 
 from flask import Flask, jsonify, request, send_from_directory, session
@@ -21,19 +22,13 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(days=30)
 
-# Lock to prevent multiple concurrent requests from starting multiple
-# preload threads in parallel (wasting external API calls and causing
-# concurrent writes to the database).
 _preload_lock = threading.Lock()
 _preload_running = False
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,20}$")
+_HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
-# ---------- Simple in-memory rate limiting for login/register ----------
-# Not shared across multiple server processes, but effective against a
-# single attacker script hitting a single running instance (the realistic
-# threat for a small self-hosted app like this one).
 _attempt_lock = threading.Lock()
 _failed_attempts: dict[str, list[float]] = {}
 _RATE_LIMIT_WINDOW_SECONDS = 5 * 60
@@ -41,8 +36,6 @@ _RATE_LIMIT_MAX_ATTEMPTS = 5
 
 
 def _rate_limit_key() -> str:
-    # Prefer a real client IP if behind a proxy that sets it; fall back to
-    # Flask's own remote_addr for direct connections.
     return request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",")[0].strip()
 
 
@@ -70,8 +63,6 @@ def _ensure_db():
 
 
 def login_required(view_func):
-    """Rejects the request with 401 if there is no logged-in user in the
-    session. All endpoints that read or write personal data use this."""
     @wraps(view_func)
     def wrapped(*args, **kwargs):
         if "user_id" not in session:
@@ -83,13 +74,12 @@ def login_required(view_func):
 @login_required
 def api_exchange_rate():
     return jsonify({"usd_to_eur": USD_TO_EUR_RATE})
+
 def _is_admin(user_id) -> bool:
-    # Semplice: il primo utente registrato (id 1) è considerato admin.
     return user_id == 1
 
 
 def admin_required(view_func):
-    """Come login_required, ma richiede anche che l'utente sia admin."""
     @wraps(view_func)
     def wrapped(*args, **kwargs):
         if "user_id" not in session:
@@ -100,13 +90,31 @@ def admin_required(view_func):
     return wrapped
 
 
+# ---------- UTILITY: Endpoint per il Caricamento File dal Dispositivo ----------
+# MODIFICA: Accetta anche GET per evitare il blocco 405 nativo e restituire un errore JSON pulito
+@app.route("/api/upload", methods=["GET", "POST"])
+@login_required
+def api_upload_file():
+    if request.method == "GET":
+        return jsonify({"error": "Richiesta non valida. Utilizzare il caricamento tramite POST"}), 405
+
+    if "file" not in request.files:
+        return jsonify({"error": "Nessun file inviato"}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "Nessun file selezionato"}), 400
+    if file:
+        uploads_dir = FRONTEND_DIR / "uploads"
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        ext = Path(file.filename).suffix or ".png"
+        filename = f"{uuid.uuid4().hex}{ext}"
+        file.save(str(uploads_dir / filename))
+        return jsonify({"url": f"uploads/{filename}"})
+
+
 # ---------- Authentication ----------
 
 def _password_error(password: str) -> str | None:
-    """Returns an error message if the password doesn't meet the minimum
-    requirements, or None if it's acceptable. Kept deliberately light
-    (length + one letter + one digit) so people aren't pushed toward
-    writing it down somewhere insecure."""
     if len(password) < 8:
         return "Password must be at least 8 characters long"
     if not re.search(r"[A-Za-z]", password):
@@ -192,8 +200,6 @@ def api_logout():
     session.clear()
     return jsonify({"success": True})
 
-# Pokémon selezionabili come foto profilo: Gen 1 completa + Mimikyu +
-# tutte le Eeveelutions (Eevee/Vaporeon/Jolteon/Flareon già in Gen 1).
 ALLOWED_AVATAR_IDS = set(range(1, 152)) | {196, 197, 470, 471, 700, 778}
 
 
@@ -275,11 +281,6 @@ def start_background_preload():
     threading.Thread(target=_preload_all_sets_worker, daemon=True).start()
 
 
-# ---------- Admin: resync forzato di TUTTI i set ----------
-# A differenza del preload automatico (che salta i set già sincronizzati),
-# questo riscarica sempre ogni set da zero, ignorando last_synced. Utile
-# dopo modifiche allo schema/normalizzazione (es. nuovi campi come i tipi
-# elementali) per rivedere subito l'effetto su dati reali.
 _force_resync_lock = threading.Lock()
 _force_resync_running = False
 _force_resync_status = {"running": False, "total": 0, "done": 0, "current_set": None}
@@ -341,13 +342,8 @@ def api_admin_resync_status():
     return jsonify(_force_resync_status)
 
 
-# ---------- Weekly automatic price refresh ----------
-# Prices don't need to be re-downloaded on every visit, but they do go
-# stale over time (cardmarket/tcgplayer prices shift week to week). This
-# background job wakes up periodically and re-syncs any set whose prices
-# are older than REFRESH_INTERVAL_DAYS, without any manual button.
 REFRESH_INTERVAL_DAYS = 7
-_REFRESH_CHECK_INTERVAL_SECONDS = 6 * 60 * 60  # check every 6 hours
+_REFRESH_CHECK_INTERVAL_SECONDS = 6 * 60 * 60
 
 _weekly_refresh_lock = threading.Lock()
 _weekly_refresh_started = False
@@ -514,8 +510,6 @@ def _sync_set(conn, set_id: str):
     return None
 
 
-# ---------- API: Advanced search with sanitization for binder internals ----------
-
 @app.route("/api/cards/search")
 @login_required
 def api_search_cards():
@@ -525,7 +519,6 @@ def api_search_cards():
     pokedex_number = request.args.get("pokedex_number")
     card_type = request.args.get("type")
 
-    # Numeric conversion for SQLite
     if pokedex_number and pokedex_number.strip():
         try:
             pokedex_number = int(pokedex_number)
@@ -537,7 +530,6 @@ def api_search_cards():
     with db.get_conn() as conn:
         cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type)
 
-    # If the local database is empty, query the official API live
     if not cards:
         if pokedex_number:
             print(f"[Search] Local database empty for Dex #{pokedex_number}. Downloading live data...")
@@ -777,13 +769,14 @@ def api_manage_binders():
         return jsonify([dict(r) for r in rows])
 
 
-_HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
-
-
-@app.route("/api/binders/<int:binder_id>", methods=["GET", "PATCH", "DELETE"])
+# MODIFICA: Accetta esplicitamente anche POST per prevenire errori 405 se l'ambiente inoltra la richiesta sul segmento base
+@app.route("/api/binders/<int:binder_id>", methods=["GET", "POST", "PATCH", "DELETE"])
 @login_required
 def api_single_binder(binder_id):
     user_id = session["user_id"]
+    if request.method == "POST":
+        return jsonify({"error": "Metodo non consentito. Utilizzare PATCH per le impostazioni e POST su /slots per posizionare le carte."}), 400
+
     with db.get_conn() as conn:
         if request.method == "DELETE":
             db.delete_binder(conn, binder_id, user_id)
@@ -820,10 +813,16 @@ def api_single_binder(binder_id):
         return jsonify({"binder": dict(b), "slots": {s["slot_number"]: dict(s) for s in slots}})
 
 
-@app.route("/api/binders/<int:binder_id>/slots", methods=["POST"])
+# MODIFICA: Accetta esplicitamente anche GET per intercettare letture anomale e restituire lo stato degli slot in sicurezza senza 405
+@app.route("/api/binders/<int:binder_id>/slots", methods=["GET", "POST"])
 @login_required
 def api_assign_slot(binder_id):
     user_id = session["user_id"]
+    if request.method == "GET":
+        with db.get_conn() as conn:
+            slots = db.get_binder_slots(conn, binder_id)
+            return jsonify({"slots": {s["slot_number"]: dict(s) for s in slots}})
+
     data = request.json or {}
     try:
         slot_number = int(data.get("slot_number"))
@@ -834,6 +833,12 @@ def api_assign_slot(binder_id):
         return jsonify({"error": "Invalid slot number"}), 400
 
     card_id = data.get("card_id")
+    custom_image_url = data.get("custom_image_url")
+    try:
+        slot_span = int(data.get("slot_span", 1))
+    except (TypeError, ValueError):
+        slot_span = 1
+
     with db.get_conn() as conn:
         binder = db.get_binder(conn, binder_id, user_id)
         if not binder:
@@ -841,7 +846,7 @@ def api_assign_slot(binder_id):
         max_slot = 1025 if binder["type"] == "pokedex" else binder["rows"] * binder["cols"] * 200
         if slot_number > max_slot:
             return jsonify({"error": "Slot number is outside the binder's limits"}), 400
-        db.set_binder_slot(conn, binder_id, slot_number, card_id if card_id else None)
+        db.set_binder_slot(conn, binder_id, slot_number, card_id if card_id else None, custom_image_url, slot_span)
         return jsonify({"success": True})
 
 

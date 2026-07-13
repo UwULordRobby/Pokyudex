@@ -93,6 +93,8 @@ CREATE TABLE IF NOT EXISTS binder_slots (
     binder_id INTEGER,
     slot_number INTEGER,
     card_id TEXT,
+    custom_image_url TEXT,
+    slot_span INTEGER DEFAULT 1,
     PRIMARY KEY (binder_id, slot_number),
     FOREIGN KEY (binder_id) REFERENCES binders (id),
     FOREIGN KEY (card_id) REFERENCES cards (id)
@@ -213,19 +215,21 @@ def init_db():
             conn.execute("ALTER TABLE binders ADD COLUMN panel_color TEXT")
         conn.execute("UPDATE binders SET panel_color = '#16141d' WHERE panel_color IS NULL OR panel_color = ''")
 
+        # Migrazione per immagini personalizzate e slot estesi nei Binders
+        if _table_exists(conn, "binder_slots") and not _column_exists(conn, "binder_slots", "custom_image_url"):
+            conn.execute("ALTER TABLE binder_slots ADD COLUMN custom_image_url TEXT")
+        if _table_exists(conn, "binder_slots") and not _column_exists(conn, "binder_slots", "slot_span"):
+            conn.execute("ALTER TABLE binder_slots ADD COLUMN slot_span INTEGER DEFAULT 1")
+
         # 4. Migration to the multi-user schema (preserves pre-existing data)
         _migrate_to_multiuser(conn)
 
         # 4b. Add the username column for databases created before it existed.
-        # A UNIQUE index (rather than a column constraint) lets multiple
-        # existing users keep username = NULL until they set one, since
-        # SQLite treats NULLs as distinct in a unique index.
         if not _column_exists(conn, "users", "username"):
             conn.execute("ALTER TABLE users ADD COLUMN username TEXT")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
         
-        # 4c. Add avatar_pokemon_id to users (foto profilo scelta tra
-        # Pokémon predefiniti — vedi ALLOWED_AVATAR_IDS in app.py).
+        # 4c. Add avatar_pokemon_id to users
         if not _column_exists(conn, "users", "avatar_pokemon_id"):
             conn.execute("ALTER TABLE users ADD COLUMN avatar_pokemon_id INTEGER")
 
@@ -271,9 +275,7 @@ def count_users(conn) -> int:
 
 
 def claim_legacy_data(conn, user_id: int):
-    """Assigns to the new user all the data created before the multi-user
-    system was introduced (collection, wishlist, favorites, existing
-    binders). Should be called only once, for the first registered user."""
+    """Assigns to the new user all the data created before the multi-user."""
     for table, id_col in (("collection", "card_id"), ("wishlist", "card_id"), ("favorite_sets", "set_id")):
         legacy_name = f"{table}_legacy"
         if _table_exists(conn, legacy_name):
@@ -355,10 +357,6 @@ def reorder_favorite_sets(conn, user_id: int, set_ids: list):
 
 
 def get_sets_needing_refresh(conn, cutoff_iso: str):
-    """Sets that have already been synced at least once, but whose prices
-    haven't been refreshed since `cutoff_iso`. Used by the weekly
-    background price-refresh job. Sets that have never synced (last_synced
-    IS NULL) are handled separately by the initial preload."""
     return conn.execute(
         "SELECT * FROM sets WHERE last_synced IS NOT NULL AND last_synced < ? ORDER BY last_synced ASC",
         (cutoff_iso,),
@@ -438,8 +436,6 @@ def toggle_wishlist_ownership(conn, user_id: int, card_id: str):
     ).fetchone()
     if existing:
         conn.execute("DELETE FROM wishlist WHERE user_id = ? AND card_id = ?", (user_id, card_id))
-        # Se la carta esce dalla wishlist, non deve restare "orfana" in
-        # nessuna bacheca dell'utente.
         conn.execute(
             """DELETE FROM wishlist_board_cards
                WHERE card_id = ? AND board_id IN (SELECT id FROM wishlist_boards WHERE user_id = ?)""",
@@ -507,10 +503,6 @@ def get_all_global_rarities(conn, name=None):
 
 
 def get_all_global_types(conn):
-    """Distinct elemental types across all synced cards. Types are stored
-    comma-separated (a card can have more than one, e.g. some older dual
-    Energy cards), so this splits and de-duplicates them in Python rather
-    than trying to do it in SQL."""
     rows = conn.execute("SELECT DISTINCT types FROM cards WHERE types IS NOT NULL AND types != ''").fetchall()
     seen = set()
     for r in rows:
@@ -530,9 +522,6 @@ def create_binder(conn, user_id: int, name, color, rows, cols, b_type, inner_col
 
 
 def update_binder(conn, binder_id: int, user_id: int, name=None, color=None, inner_color=None, panel_color=None):
-    """Updates only the provided fields (name / cover color / page-matting
-    color / grid-panel color) for a binder owned by user_id. Returns True
-    if a row was actually updated."""
     fields = []
     params = []
     if name is not None:
@@ -577,29 +566,29 @@ def delete_binder(conn, binder_id: int, user_id: int):
     conn.execute("DELETE FROM binders WHERE id = ? AND user_id = ?", (binder_id, user_id))
 
 
+# MODIFICA: Utilizza il LEFT JOIN così da caricare gli slot custom privi di card_id associato
 def get_binder_slots(conn, binder_id: int):
     return conn.execute(
         """SELECT binder_slots.*, cards.name, cards.image_small, cards.image_large, cards.price_market, cards.currency
            FROM binder_slots
-           JOIN cards ON binder_slots.card_id = cards.id
+           LEFT JOIN cards ON binder_slots.card_id = cards.id
            WHERE binder_slots.binder_id = ?""",
         (binder_id,)
     ).fetchall()
 
 
-def set_binder_slot(conn, binder_id: int, slot_number: int, card_id: str | None):
+# MODIFICA: Esteso l'upsert per accettare custom_image_url e lo span di larghezza
+def set_binder_slot(conn, binder_id: int, slot_number: int, card_id: str | None, custom_image_url: str | None = None, slot_span: int = 1):
     conn.execute("DELETE FROM binder_slots WHERE binder_id = ? AND slot_number = ?", (binder_id, slot_number))
-    if card_id:
+    if card_id or custom_image_url:
         conn.execute(
-            "INSERT INTO binder_slots (binder_id, slot_number, card_id) VALUES (?, ?, ?)",
-            (binder_id, slot_number, card_id)
+            "INSERT INTO binder_slots (binder_id, slot_number, card_id, custom_image_url, slot_span) VALUES (?, ?, ?, ?, ?)",
+            (binder_id, slot_number, card_id if card_id else None, custom_image_url if custom_image_url else None, slot_span)
         )
 
 # ---------- Bacheche personalizzate della wishlist ----------
 
 def get_uncategorized_wishlist(conn, user_id: int):
-    """Carte in wishlist che NON sono ancora state assegnate a nessuna
-    bacheca dell'utente — sono quelle mostrate nella lista principale."""
     return conn.execute(
         """SELECT cards.*, sets.name AS set_name, sets.release_date
            FROM wishlist
