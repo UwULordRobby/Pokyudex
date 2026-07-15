@@ -85,7 +85,7 @@ def admin_required(view_func):
         if "user_id" not in session:
             return jsonify({"error": "Authentication required"}), 401
         if not _is_admin(session["user_id"]):
-            return jsonify({"error": "Accesso admin richiesto"}), 403
+            return jsonify({"error": "Admin access required"}), 403
         return view_func(*args, **kwargs)
     return wrapped
 
@@ -94,13 +94,13 @@ def admin_required(view_func):
 @login_required
 def api_upload_file():
     if request.method == "GET":
-        return jsonify({"error": "Richiesta non valida. Utilizzare il caricamento tramite POST"}), 405
+        return jsonify({"error": "Invalid request. Use POST to upload a file"}), 405
 
     if "file" not in request.files:
-        return jsonify({"error": "Nessun file inviato"}), 400
+        return jsonify({"error": "No file sent"}), 400
     file = request.files["file"]
     if file.filename == "":
-        return jsonify({"error": "Nessun file selezionato"}), 400
+        return jsonify({"error": "No file selected"}), 400
     if file:
         uploads_dir = FRONTEND_DIR / "uploads"
         uploads_dir.mkdir(parents=True, exist_ok=True)
@@ -227,9 +227,9 @@ def api_set_avatar():
     try:
         pokemon_id = int(data.get("pokemon_id"))
     except (TypeError, ValueError):
-        return jsonify({"error": "ID Pokémon non valido"}), 400
+        return jsonify({"error": "Invalid Pokémon ID"}), 400
     if pokemon_id not in ALLOWED_AVATAR_IDS:
-        return jsonify({"error": "Pokémon non disponibile come avatar"}), 400
+        return jsonify({"error": "This Pokémon isn't available as an avatar"}), 400
     with db.get_conn() as conn:
         conn.execute("UPDATE users SET avatar_pokemon_id = ? WHERE id = ?", (pokemon_id, session["user_id"]))
     return jsonify({"success": True, "avatar_pokemon_id": pokemon_id})
@@ -330,7 +330,7 @@ def start_force_resync_all() -> bool:
 @admin_required
 def api_admin_resync_all():
     if not start_force_resync_all():
-        return jsonify({"error": "Un resync è già in corso"}), 409
+        return jsonify({"error": "A resync is already in progress"}), 409
     return jsonify({"success": True})
 
 
@@ -635,7 +635,7 @@ def api_wishlist_boards():
         name = (data.get("name") or "").strip()[:60]
         color = data.get("color") or "#a855f7"
         if not name:
-            return jsonify({"error": "Il nome della bacheca non può essere vuoto"}), 400
+            return jsonify({"error": "Board name cannot be empty"}), 400
         if not _HEX_COLOR_RE.match(color):
             color = "#a855f7"
         with db.get_conn() as conn:
@@ -671,7 +671,7 @@ def api_reorder_board_cards(board_id):
     with db.get_conn() as conn:
         board = db.get_wishlist_board(conn, board_id, user_id)
         if not board:
-            return jsonify({"error": "Bacheca non trovata"}), 404
+            return jsonify({"error": "Board not found"}), 404
         db.reorder_board_cards(conn, board_id, card_ids)
     return jsonify({"success": True})
 
@@ -683,7 +683,7 @@ def api_wishlist_board_single(board_id):
     with db.get_conn() as conn:
         board = db.get_wishlist_board(conn, board_id, user_id)
         if not board:
-            return jsonify({"error": "Bacheca non trovata"}), 404
+            return jsonify({"error": "Board not found"}), 404
 
         if request.method == "DELETE":
             db.delete_wishlist_board(conn, board_id, user_id)
@@ -696,9 +696,9 @@ def api_wishlist_board_single(board_id):
             if name is not None:
                 name = name.strip()[:60]
                 if not name:
-                    return jsonify({"error": "Il nome non può essere vuoto"}), 400
+                    return jsonify({"error": "Name cannot be empty"}), 400
             if color is not None and not _HEX_COLOR_RE.match(color):
-                return jsonify({"error": "Colore non valido"}), 400
+                return jsonify({"error": "Invalid color"}), 400
             db.update_wishlist_board(conn, board_id, user_id, name=name, color=color)
             updated = db.get_wishlist_board(conn, board_id, user_id)
             return jsonify(dict(updated))
@@ -714,16 +714,16 @@ def api_wishlist_board_add_card(board_id):
     data = request.json or {}
     card_id = data.get("card_id")
     if not card_id:
-        return jsonify({"error": "ID carta mancante"}), 400
+        return jsonify({"error": "Missing card ID"}), 400
     with db.get_conn() as conn:
         board = db.get_wishlist_board(conn, board_id, user_id)
         if not board:
-            return jsonify({"error": "Bacheca non trovata"}), 404
+            return jsonify({"error": "Board not found"}), 404
         in_wishlist = conn.execute(
             "SELECT 1 FROM wishlist WHERE user_id = ? AND card_id = ?", (user_id, card_id)
         ).fetchone()
         if not in_wishlist:
-            return jsonify({"error": "La carta non è nella tua wishlist"}), 400
+            return jsonify({"error": "This card is not in your wishlist"}), 400
         db.add_card_to_board(conn, board_id, card_id)
         return jsonify({"success": True})
 
@@ -735,7 +735,7 @@ def api_wishlist_board_remove_card(board_id, card_id):
     with db.get_conn() as conn:
         board = db.get_wishlist_board(conn, board_id, user_id)
         if not board:
-            return jsonify({"error": "Bacheca non trovata"}), 404
+            return jsonify({"error": "Board not found"}), 404
         db.remove_card_from_board(conn, board_id, card_id)
         return jsonify({"success": True})
 

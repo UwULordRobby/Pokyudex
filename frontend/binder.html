@@ -1182,7 +1182,7 @@
 
       canvas.toBlob(async (blob) => {
         if (!blob) {
-          alert("Errore durante la generazione dell'immagine croppata.");
+          alert("Error generating the cropped image.");
           confirmBtn.disabled = false;
           confirmBtn.textContent = "Crop & Upload Item";
           return;

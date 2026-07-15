@@ -64,25 +64,37 @@
     </div>
 
     <div id="boards-section" style="padding: 14px 6px 16px; margin-bottom: 20px; border-bottom: 1px solid var(--border);">
-      <div class="section-title">Le tue bacheche</div>
+      <div class="section-title">Your Boards</div>
       <div class="boards-grid" id="boards-grid"></div>
     </div>
 
     <div id="board-detail-view" style="display:none;">
   <div class="binder-header" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 15px;">
     <div style="flex: 1; min-width: 200px;">
-      <button class="btn" onclick="closeBoardDetail()" style="margin-bottom:10px;">&larr; Tutte le bacheche</button><br>
+      <button class="btn" onclick="closeBoardDetail()" style="margin-bottom:10px;">&larr; All Boards</button><br>
       <h2 id="board-detail-title" style="margin:0; font-family:'Rajdhani'; font-size:28px;"></h2>
     </div>
     
     <div style="display:flex; gap: 12px; align-items: center;">
-      <button class="btn btn-accent" onclick="openAddToBoardOverlay()">+ Aggiungi carte</button>
-      <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="deleteCurrentBoard()">Elimina bacheca</button>
+      <button class="btn btn-accent" onclick="openAddToBoardOverlay()">+ Add Cards</button>
+      <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="deleteCurrentBoard()">Delete Board</button>
     </div>
+  </div>
+
+  <div class="controls-row" style="justify-content: flex-end;">
+    <select id="board-sort-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 260px; height: 41px; padding: 0 14px;">
+      <option value="manual">Custom Order</option>
+      <option value="price_desc">Price: highest first</option>
+      <option value="price_asc">Price: lowest first</option>
+      <option value="rarity_desc">Rarity: rarest first</option>
+      <option value="rarity_asc">Rarity: least rare first</option>
+      <option value="date_desc">Release date: newest first</option>
+      <option value="date_asc">Release date: oldest first</option>
+    </select>
   </div>
   
   <div id="board-cards-container">
-    <div class="state-msg">Nessuna carta in questa bacheca. Usa "+ Aggiungi carte".</div>
+    <div class="state-msg">No cards in this board yet. Use "+ Add Cards".</div>
   </div>
 </div>
 
@@ -107,43 +119,43 @@
   <div id="new-board-modal" class="modal" onclick="closeNewBoardModal()">
     <div class="about-card" onclick="event.stopPropagation()" style="max-width:340px;">
       <button class="modal-close" style="position:absolute; top:-14px; right:-14px; width:32px; height:32px; border-radius:50%; background:var(--panel); border:1px solid var(--border); font-size:18px;" onclick="closeNewBoardModal()">&times;</button>
-      <div class="eyebrow" style="color: var(--gold);">Nuova bacheca</div>
+      <div class="eyebrow" style="color: var(--gold);">New Board</div>
       <div class="form-group" style="width:100%; margin:14px 0;">
-        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Nome</label>
-        <input type="text" id="new-board-name" placeholder="Es. Carte rosa" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);" />
+        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Name</label>
+        <input type="text" id="new-board-name" placeholder="E.g. Pink cards" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);" />
       </div>
       <div class="form-group" style="margin:0 0 20px;">
-        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Colore</label>
+        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Color</label>
         <input type="color" id="new-board-color" value="#a855f7" style="width: 70px; padding:2px; height:37px;" />
       </div>
-      <button class="btn btn-accent" style="width:100%;" onclick="createBoard()">Crea bacheca</button>
+      <button class="btn btn-accent" style="width:100%;" onclick="createBoard()">Create Board</button>
     </div>
   </div>
 
   <div id="edit-board-modal" class="modal" onclick="closeEditBoardModal()">
     <div class="about-card" onclick="event.stopPropagation()" style="max-width:340px;">
       <button class="modal-close" style="position:absolute; top:-14px; right:-14px; width:32px; height:32px; border-radius:50%; background:var(--panel); border:1px solid var(--border); font-size:18px;" onclick="closeEditBoardModal()">&times;</button>
-      <div class="eyebrow" style="color: var(--gold);">Modifica bacheca</div>
+      <div class="eyebrow" style="color: var(--gold);">Edit Board</div>
       <div class="form-group" style="width:100%; margin:14px 0;">
-        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Nome</label>
+        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Name</label>
         <input type="text" id="edit-board-name" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);" />
       </div>
       <div class="form-group" style="margin:0 0 20px;">
-        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Colore</label>
+        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Color</label>
         <input type="color" id="edit-board-color" style="width: 70px; padding:2px; height:37px;" />
       </div>
-      <button class="btn btn-accent" style="width:100%;" onclick="saveEditBoard()">Salva</button>
+      <button class="btn btn-accent" style="width:100%;" onclick="saveEditBoard()">Save</button>
     </div>
   </div>
 
   <div id="add-to-board-overlay" class="search-overlay">
     <div style="max-width: 1200px; margin: 0 auto;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-        <h2>Aggiungi carte a "<span id="add-to-board-title"></span>"</h2>
-        <button class="btn" onclick="closeAddToBoardOverlay()">Chiudi</button>
+        <h2>Add Cards to "<span id="add-to-board-title"></span>"</h2>
+        <button class="btn" onclick="closeAddToBoardOverlay()">Close</button>
       </div>
       <div style="display: flex; justify-content: flex-start; margin-bottom: 20px; gap: 10px; align-items: center;">
-        <span style="font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--text-muted);">Ordina per:</span>
+        <span style="font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--text-muted);">Sort by:</span>
         <select id="overlay-sort-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 240px; height: 41px; padding: 0 14px;">
           <option value="price_desc">Price: highest first</option>
           <option value="price_asc">Price: lowest first</option>
@@ -176,6 +188,7 @@
     let currentBoardCards = []; 
     let currentBoardId = null;
     let editingBoardId = null;
+    let boardSortCriteria = 'manual';
     let usdToEurRate = 0.92;
 
     const RARITY_ORDER = [
@@ -191,7 +204,7 @@
       try {
         const data = await api('/api/exchange-rate');
         usdToEurRate = data.usd_to_eur;
-      } catch (err) { console.error('Impossibile caricare il tasso di cambio:', err); }
+      } catch (err) { console.error('Unable to load exchange rate:', err); }
     }
 
     function calculateStats(cards) {
@@ -228,7 +241,7 @@
     function renderWishlist() {
       const container = document.getElementById('wishlist-container');
       if (!uncategorized.length) {
-        container.innerHTML = '<div class="state-msg">Nessuna carta salvata in Wishlist. Cerca carte nell\'Home e aggiungile con ❤️.</div>';
+        container.innerHTML = '<div class="state-msg">No cards saved in your Wishlist yet. Search for cards on the Home page and add them with ❤️.</div>';
         return;
       }
 
@@ -322,7 +335,7 @@
       try {
         boards = await api('/api/wishlist/boards');
         renderBoardsGrid();
-      } catch (err) { console.error('Errore caricamento bacheche:', err); }
+      } catch (err) { console.error('Error loading boards:', err); }
     }
 
     // MODIFICA: Sostituito il cestino (🗑) con una X rossa (❌) nelle azioni della copertina
@@ -342,8 +355,8 @@
         };
         tile.innerHTML = `
           <div class="board-tile-actions">
-            <button title="Modifica" onclick="event.stopPropagation(); openEditBoardModal(${b.id})">✎</button>
-            <button title="Elimina" onclick="event.stopPropagation(); deleteBoardById(${b.id})">❌</button>
+            <button title="Edit" onclick="event.stopPropagation(); openEditBoardModal(${b.id})">✎</button>
+            <button title="Delete" onclick="event.stopPropagation(); deleteBoardById(${b.id})">❌</button>
           </div>
           <div class="board-tile-name">${escapeHtml(b.name)}</div>
           <div class="board-tile-count">${b.card_count} cart${b.card_count === 1 ? 'a' : 'e'}</div>
@@ -394,7 +407,7 @@
 
       const newTile = document.createElement('div');
       newTile.className = 'board-tile new-board-tile';
-      newTile.textContent = '+ Nuova bacheca';
+      newTile.textContent = '+ New Board';
       newTile.onclick = openNewBoardModal;
       grid.appendChild(newTile);
     }
@@ -432,7 +445,7 @@
     async function createBoard() {
       const name = document.getElementById('new-board-name').value.trim();
       const color = document.getElementById('new-board-color').value;
-      if (!name) { alert('Inserisci un nome per la bacheca.'); return; }
+      if (!name) { alert('Enter a name for the board.'); return; }
       try {
         await api('/api/wishlist/boards', {
           method: 'POST',
@@ -457,7 +470,7 @@
     async function saveEditBoard() {
       const name = document.getElementById('edit-board-name').value.trim();
       const color = document.getElementById('edit-board-color').value;
-      if (!name) { alert('Il nome non può essere vuoto.'); return; }
+      if (!name) { alert('Name cannot be empty.'); return; }
       try {
         await api(`/api/wishlist/boards/${editingBoardId}`, {
           method: 'PATCH',
@@ -473,7 +486,7 @@
     }
 
     async function deleteBoardById(boardId) {
-      if (!confirm('Eliminare questa bacheca?')) return;
+      if (!confirm('Delete this board?')) return;
       try {
         await api(`/api/wishlist/boards/${boardId}`, { method: 'DELETE' });
         await loadBoards();
@@ -482,7 +495,7 @@
     }
 
     async function deleteCurrentBoard() {
-      if (!confirm('Eliminare questa bacheca?')) return;
+      if (!confirm('Delete this board?')) return;
       try {
         await api(`/api/wishlist/boards/${currentBoardId}`, { method: 'DELETE' });
         closeBoardDetail();
@@ -494,11 +507,18 @@
     async function openBoardDetail(boardId) {
       currentBinderId = null;
       currentBoardId = boardId;
+      boardSortCriteria = 'manual';
+      document.getElementById('board-sort-select').value = 'manual';
       document.getElementById('boards-section').style.display = 'none';
       document.getElementById('main-wishlist-section').style.display = 'none';
       document.getElementById('board-detail-view').style.display = 'block';
       await renderBoardDetail();
     }
+
+    document.getElementById('board-sort-select').addEventListener('change', (e) => {
+      boardSortCriteria = e.target.value;
+      renderBoardCardsGrid();
+    });
 
     function closeBoardDetail() {
       currentBoardId = null;
@@ -510,7 +530,7 @@
 
     async function renderBoardDetail() {
       const container = document.getElementById('board-cards-container');
-      container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Caricamento...</div>';
+      container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Loading...</div>';
       try {
         const data = await api(`/api/wishlist/boards/${currentBoardId}`);
         document.getElementById('board-detail-title').textContent = data.board.name;
@@ -526,24 +546,27 @@
     function renderBoardCardsGrid() {
       const container = document.getElementById('board-cards-container');
       if (!currentBoardCards.length) {
-        container.innerHTML = '<div class="state-msg">Nessuna carta in questa bacheca. Usa "+ Aggiungi carte".</div>';
+        container.innerHTML = '<div class="state-msg">No cards in this board yet. Use "+ Add Cards".</div>';
         return;
       }
 
+      const isManualOrder = boardSortCriteria === 'manual';
+      const displayCards = isManualOrder ? currentBoardCards : sortCards(currentBoardCards, boardSortCriteria);
+
       const grid = document.createElement('div');
       grid.className = 'cards-grid';
-      currentBoardCards.forEach((c) => {
+      displayCards.forEach((c) => {
         const priceLabel = formatPrice(c.price_market, c.currency);
         const tile = document.createElement('div');
         tile.className = 'card-tile';
-        tile.draggable = true;
+        tile.draggable = isManualOrder;
         tile.dataset.cardId = c.id;
         tile.onclick = () => {
           if (tile.classList.contains('dragging-suppress-click')) { tile.classList.remove('dragging-suppress-click'); return; }
           openModal(c.image_large || c.image_small || '');
         };
         tile.innerHTML = `
-          <button class="card-tile-small-remove" title="Rimuovi dalla bacheca" onclick="event.stopPropagation(); removeCardFromCurrentBoard('${c.id}')">✕</button>
+          <button class="card-tile-small-remove" title="Remove from board" onclick="event.stopPropagation(); removeCardFromCurrentBoard('${c.id}')">✕</button>
           <img src="${escapeHtml(c.image_large || c.image_small || '')}" alt="${escapeHtml(c.name)}" loading="lazy" onerror="this.src='${escapeHtml(c.image_small || '')}'">
           <div class="price-tag ${priceLabel ? '' : 'no-price'}">${priceLabel || 'n/a'}</div>
           <div class="card-info">
@@ -553,31 +576,33 @@
           </div>
         `;
 
-        tile.addEventListener('dragstart', (e) => {
-          window.draggedBoardCardId = c.id;
-          tile.classList.add('dragging');
-          e.dataTransfer.effectAllowed = 'move';
-        });
-        tile.addEventListener('dragend', () => {
-          tile.classList.remove('dragging');
-          tile.classList.add('dragging-suppress-click');
-          window.draggedBoardCardId = undefined;
-        });
-        tile.addEventListener('dragover', (e) => {
-          if (window.draggedBoardCardId === undefined) return;
-          e.preventDefault();
-          tile.style.borderColor = 'var(--gold)';
-        });
-        tile.addEventListener('dragleave', () => { tile.style.borderColor = ''; });
-        tile.addEventListener('drop', (e) => {
-          e.preventDefault();
-          tile.style.borderColor = '';
-          const draggedCardId = window.draggedBoardCardId;
-          const targetCardId = c.id;
-          if (draggedCardId && draggedCardId !== targetCardId) {
-            reorderBoardCardsAction(draggedCardId, targetCardId);
-          }
-        });
+        if (isManualOrder) {
+          tile.addEventListener('dragstart', (e) => {
+            window.draggedBoardCardId = c.id;
+            tile.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+          });
+          tile.addEventListener('dragend', () => {
+            tile.classList.remove('dragging');
+            tile.classList.add('dragging-suppress-click');
+            window.draggedBoardCardId = undefined;
+          });
+          tile.addEventListener('dragover', (e) => {
+            if (window.draggedBoardCardId === undefined) return;
+            e.preventDefault();
+            tile.style.borderColor = 'var(--gold)';
+          });
+          tile.addEventListener('dragleave', () => { tile.style.borderColor = ''; });
+          tile.addEventListener('drop', (e) => {
+            e.preventDefault();
+            tile.style.borderColor = '';
+            const draggedCardId = window.draggedBoardCardId;
+            const targetCardId = c.id;
+            if (draggedCardId && draggedCardId !== targetCardId) {
+              reorderBoardCardsAction(draggedCardId, targetCardId);
+            }
+          });
+        }
 
         grid.appendChild(tile);
       });
@@ -630,7 +655,7 @@
     function renderAddToBoardList() {
       const container = document.getElementById('add-to-board-container');
       if (!uncategorized.length) {
-        container.innerHTML = '<div class="state-msg">Non hai carte in wishlist da aggiungere. Aggiungine di nuove alla wishlist dall\'Home.</div>';
+        container.innerHTML = '<div class="state-msg">You don\'t have any wishlist cards to add. Add new ones to your wishlist from the Home page.</div>';
         return;
       }
       
@@ -654,7 +679,7 @@
         displayedCount++;
 
         tile.innerHTML = `
-          <button class="add-to-board-btn" title="Aggiungi a questa bacheca">+</button>
+          <button class="add-to-board-btn" title="Add to this board">+</button>
           <img src="${escapeHtml(c.image_large || c.image_small || '')}" alt="${escapeHtml(c.name)}" loading="lazy" onerror="this.src='${escapeHtml(c.image_small || '')}'">
           <div class="price-tag ${priceLabel ? '' : 'no-price'}">${priceLabel || 'n/a'}</div>
           <div class="card-info">
@@ -695,7 +720,7 @@
       });
 
       if (displayedCount === 0) {
-        container.innerHTML = '<div class="state-msg">Tutte le carte della tua wishlist sono già state aggiunte a questa bacheca!</div>';
+        container.innerHTML = '<div class="state-msg">All the cards in your wishlist have already been added to this board!</div>';
         return;
       }
 

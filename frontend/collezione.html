@@ -94,7 +94,7 @@
       try {
         const data = await api('/api/exchange-rate');
         usdToEurRate = data.usd_to_eur;
-      } catch (err) { console.error('Impossibile caricare il tasso di cambio:', err); }
+      } catch (err) { console.error('Unable to load exchange rate:', err); }
     }
 
     function calculateStats(cards) {
