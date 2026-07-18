@@ -49,9 +49,10 @@ def _get_or_create_secret_key() -> str:
     _SECRET_KEY_PATH.write_text(key)
     return key
 
-# Tasso di cambio USD -> EUR usato per convertire i prezzi TCGplayer (USD)
-# nello stesso totale dei prezzi CardMarket (EUR) su collezione/wishlist.
-# Aggiornalo manualmente qui o via variabile d'ambiente USD_TO_EUR_RATE.
+
+# USD -> EUR exchange rate used to convert TCGplayer prices (USD)
+# to match CardMarket prices (EUR) on collection/wishlist pages.
+# Update it manually here or via the USD_TO_EUR_RATE environment variable.
 USD_TO_EUR_RATE = float(os.environ.get("USD_TO_EUR_RATE", "0.92"))
 
 SECRET_KEY = _get_or_create_secret_key()

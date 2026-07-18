@@ -112,7 +112,7 @@
 
   <script src="app.js"></script>
   <script>
-    let mode = 'login'; // 'login' | 'register'
+    let mode = 'login'; 
 
     const form = document.getElementById('auth-form');
     const errorBox = document.getElementById('auth-error');
@@ -207,15 +207,13 @@
       }
     });
 
-    // Forza lo stato di login corretto all'avvio pulendo i vincoli HTML5 dei campi nascosti
     setMode('login');
 
-    // If already logged in, skip straight to the home page.
     (async () => {
       try {
         const data = await api('/api/me');
         if (data.user) window.location.href = 'index.html';
-      } catch (err) { /* not logged in, stay here */ }
+      } catch (err) { }
     })();
   </script>
 </body>

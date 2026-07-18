@@ -71,7 +71,6 @@
 
   <script src="app.js"></script>
   <script>
-    // Pink palette matching the "my collection" page's fixed brand dot.
     renderBloomLayer([
       { h: 330, s: 78, l: 68 },
       { h: 350, s: 68, l: 62 },
@@ -111,7 +110,6 @@
 
     function sortCards(cardsArray, criteria) {
       return [...cardsArray].sort((a, b) => {
-        // Uniforma i prezzi in EUR prima del confronto per garantire un ordinamento corretto delle carte in dollari
         const getPriceInEur = (card) => {
           if (card.price_market == null) return null;
           return card.currency === 'USD' ? card.price_market * usdToEurRate : card.price_market;
@@ -156,7 +154,6 @@
       const grid = document.createElement('div');
       grid.className = 'cards-grid';
       sorted.forEach((c) => {
-        // Conversione al volo in EUR per i cartellini singoli se la valuta nativa è USD
         let targetPrice = c.price_market;
         let targetCurrency = c.currency;
         if (targetPrice !== null && targetCurrency === 'USD') {

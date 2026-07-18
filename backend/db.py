@@ -3,12 +3,12 @@ from contextlib import contextmanager
 
 from config import DB_PATH
 
-# NOTA SCHEMA MULTI-UTENTE:
-# - "sets" and "cards" remain global tables (shared product catalog).
-# - "collection", "wishlist" and "favorite_sets" now have a composite
-#   primary key (user_id, ...) so each user can own/want the same card
-#   independently of other users.
-# - "binders" has a user_id column to know who owns each binder.
+# MULTI-USER SCHEMA NOTE[cite: 3]:
+# - "sets" and "cards" remain global tables (shared product catalog)[cite: 3].
+# - "collection", "wishlist" and "favorite_sets" now have a composite[cite: 3]
+#   primary key (user_id, ...) so each user can own/want the same card[cite: 3]
+#   independently of other users[cite: 3].
+# - "binders" has a user_id column to know who owns each binder[cite: 3].
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sets (
     id TEXT PRIMARY KEY,
@@ -228,7 +228,7 @@ def init_db():
                 print("[Database] Database reset to populate National Pokédex data.")
 
 
-# ---------- Utenti ----------
+# ---------- Users ----------
 
 def create_user(conn, email: str, username: str, password_hash: str):
     import datetime
@@ -569,9 +569,9 @@ def set_binder_slot(conn, binder_id: int, slot_number: int, card_id: str | None,
             (binder_id, slot_number, card_id if card_id else None, custom_image_url if custom_image_url else None, slot_span)
         )
 
-# ---------- Bacheche personalizzate della wishlist ----------
+# ---------- Custom Wishlist Boards ----------
 
-# MODIFICA CORRETTIVA: Rimosso il filtro NOT EXISTS per fare in modo che mostri TUTTE le carte inserite in wishlist, consentendo la duplicazione su bacheche multiple
+# CORRECTIVE EDIT[cite: 3]: Removed the NOT EXISTS filter to ensure it shows ALL cards added to the wishlist, allowing duplication across multiple boards[cite: 3]
 def get_uncategorized_wishlist(conn, user_id: int):
     return conn.execute(
         """SELECT cards.*, sets.name AS set_name, sets.release_date

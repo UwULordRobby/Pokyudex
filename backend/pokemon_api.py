@@ -1,5 +1,5 @@
 """
-Wrapper minimale per la Pokémon TCG API (api.pokemontcg.io/v2).
+Minimal wrapper for the Pokémon TCG API (api.pokemontcg.io/v2).
 Docs: https://docs.pokemontcg.io/
 """
 import requests
@@ -19,19 +19,19 @@ def _headers():
 
 
 def fetch_sets() -> list[dict]:
-    """Recupera l'elenco di tutte le espansioni disponibili."""
+    """Retrieves the list of all available expansions."""
     resp = requests.get(f"{API_BASE_URL}/sets", headers=_headers(), timeout=30)
     if resp.status_code == 429:
         raise PokemonAPIError(
-            "Limite di richieste raggiunto. Se non hai ancora una API key gratuita, "
-            "registrati su https://dev.pokemontcg.io per limiti più alti."
+            "Rate limit reached. If you do not have a free API key yet, "
+            "register at https://dev.pokemontcg.io for higher limits."
         )
     resp.raise_for_status()
     return resp.json().get("data", [])
 
 
 def fetch_cards_for_set(set_id: str) -> list[dict]:
-    """Recupera TUTTE le carte di un'espansione con paginazione automatica."""
+    """Retrieves ALL cards for a set with automatic pagination."""
     all_cards = []
     page = 1
     page_size = 250
@@ -39,7 +39,7 @@ def fetch_cards_for_set(set_id: str) -> list[dict]:
         params = {"q": f"set.id:{set_id}", "page": page, "pageSize": page_size}
         resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=60)
         if resp.status_code == 429:
-            raise PokemonAPIError("Limite di richieste raggiunto.")
+            raise PokemonAPIError("Rate limit reached.")
         resp.raise_for_status()
         payload = resp.json()
         batch = payload.get("data", [])
@@ -53,10 +53,10 @@ def fetch_cards_for_set(set_id: str) -> list[dict]:
     return all_cards
 
 
-# ---------- NUOVI METODI: Ricerca Live di Emergenza ----------
+# ---------- NEW METHODS: Emergency Live Search ----------
 
 def fetch_cards_by_pokedex(pokedex_number: int) -> list[dict]:
-    """Cerca direttamente sul server Pokémon TCG tutte le carte corrispondenti a un ID Pokédex."""
+    """Searches directly on the Pokémon TCG server for all cards matching a Pokédex ID."""
     params = {"q": f"nationalPokedexNumbers:{pokedex_number}"}
     resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=30)
     resp.raise_for_status()
@@ -64,7 +64,7 @@ def fetch_cards_by_pokedex(pokedex_number: int) -> list[dict]:
 
 
 def fetch_cards_by_name(name: str) -> list[dict]:
-    """Cerca direttamente sul server Pokémon TCG le carte corrispondenti a un nome specifico."""
+    """Searches directly on the Pokémon TCG server for cards matching a specific name."""
     params = {"q": f"name:\"{name}*\""}
     resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=30)
     resp.raise_for_status()
@@ -75,7 +75,7 @@ def normalize_set(raw: dict) -> dict:
     images = raw.get("images", {}) or {}
     return {
         "id": raw.get("id"),
-        "name": raw.get("name", "Set sconosciuto"),
+        "name": raw.get("name", "Unknown set"),
         "series": raw.get("series"),
         "release_date": raw.get("releaseDate"),
         "logo_url": images.get("logo"),
@@ -88,12 +88,12 @@ def normalize_set(raw: dict) -> dict:
 _TCGPLAYER_VARIANT_PRIORITY = ["normal", "holofoil", "reverseHolofoil", "1stEditionHolofoil", "1stEditionNormal", "unlimitedHolofoil", "unlimited"]
 
 def _pick_tcgplayer_variant(tcg_prices: dict):
-    # Cerca varianti preferite che abbiano ALMENO un prezzo valido valorizzato
+    # Look for preferred variants that have AT LEAST one valid price valued
     for variant in _TCGPLAYER_VARIANT_PRIORITY:
         v = tcg_prices.get(variant)
         if v and any(v.get(k) is not None for k in ["market", "mid", "low", "high"]):
             return v
-    # Recupero di emergenza su qualsiasi altra variante
+    # Emergency fallback on any other variant
     for v in tcg_prices.values():
         if v and any(v.get(k) is not None for k in ["market", "mid", "low", "high"]):
             return v
@@ -142,7 +142,7 @@ def normalize_card(raw: dict, set_id: str) -> dict:
     raw_types = raw.get("types")
     types = ",".join(raw_types) if (raw_types and isinstance(raw_types, list)) else None
 
-    # Mappatura correttiva delle immagini per il set McDonald's 2018 (mcd18)
+    # Corrective image mapping for the McDonald's 2018 set (mcd18)
     if set_id == "mcd18":
         mcd_mapping = {
             "1": ("sm1", "18"),   # Growlithe
@@ -172,7 +172,7 @@ def normalize_card(raw: dict, set_id: str) -> dict:
     return {
         "id": raw.get("id"),
         "set_id": set_id,
-        "name": raw.get("name", "Carta sconosciuta"),
+        "name": raw.get("name", "Unknown card"),
         "card_number": card_number,
         "rarity": rarity, 
         "image_small": image_small,

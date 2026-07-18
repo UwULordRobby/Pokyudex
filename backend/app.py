@@ -880,4 +880,4 @@ def api_assign_slot(binder_id):
 if __name__ == "__main__":
     db.init_db()
     start_weekly_refresh()
-    app.run(host=HOST, port=PORT, debug=DEBUG)
+    app.run(host=HOST, port=PORT, debug=DEBUG)  
