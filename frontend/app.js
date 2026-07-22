@@ -49,21 +49,6 @@ function renderBloomLayer(palette) {
   const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
   const isSetPage = window.location.pathname.includes('set.html') || new URLSearchParams(window.location.search).has('id');
 
-  if (!document.getElementById('gooey-svg-element')) {
-    const svgFilter = `
-      <svg id="gooey-svg-element" xmlns="http://www.w3.org/2000/svg" version="1.1" style="position:fixed; top:-100%; left:-100%; width:0; height:0; opacity:0; pointer-events:none; z-index:-9999;">
-        <defs>
-          <filter id="gooey-liquid">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="60" result="blur" />
-            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 11 -3.5" result="goo" />
-            <feBlend in="SourceGraphic" in2="goo" />
-          </filter>
-        </defs>
-      </svg>
-    `;
-    document.body.insertAdjacentHTML('beforeend', svgFilter);
-  }
-
   let bloom = document.getElementById('bloom-layer');
   if (!bloom) {
     bloom = document.createElement('div');
@@ -273,7 +258,6 @@ function hslToHex(h, s, l) {
   return `#${rHex}${gHex}${bHex}`;
 }
 
-// 100% CALIBRATED CHROMATIC WHEEL WITH 10 SAVED COLOR HISTORIES AND PASTE HEX CODE INPUT TWEAK
 function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   if (!container) return null;
   const input = document.getElementById(hiddenInputId);
@@ -296,7 +280,6 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
         <label>Lightness: <span class="l-val">${hsl.l}%</span></label>
         <input type="range" class="cp-light" min="0" max="100" value="${hsl.l}">
       </div>
-      <!-- TWEAK: Live preview converted to input text tag to allow copy/pasting hex codes -->
       <input type="text" class="color-picker-live-preview" value="${color.toUpperCase()}" maxlength="7" style="background-color: ${color}; color: ${hsl.l > 50 ? '#121118' : '#ece8e2'}">
       <div class="color-picker-saved-container">
         <div class="color-picker-saved-headline">
@@ -359,7 +342,6 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     setTimeout(() => { updateMarkerPosition(hsl.h, hsl.s); }, 10);
   });
 
-  /* NEW TWEAK: Add event listener to process manual color code entries and pastes */
   livePreviewInput.addEventListener('change', () => {
     let inputVal = livePreviewInput.value.trim();
     if (!inputVal.startsWith('#')) { inputVal = '#' + inputVal; }
@@ -367,7 +349,7 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
       pickerInstance.setValue(inputVal);
       updateColor();
     } else {
-      livePreviewInput.value = input.value.toUpperCase(); // Restore on typing fault
+      livePreviewInput.value = input.value.toUpperCase();
     }
   });
   livePreviewInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') livePreviewInput.blur(); });
@@ -483,6 +465,117 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
 
   return pickerInstance;
 }
+
+// ==========================================================================
+// PREMIUM V3 HOLO GLOBAL CARD SYSTEM
+// ==========================================================================
+function initGlobalCardModal() {
+  if (document.getElementById('global-card-modal')) return;
+
+  const modalHtml = `
+    <div id="global-card-modal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(8,7,12,0.94); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); align-items:center; justify-content:center; box-sizing:border-box; padding:40px;">
+      <div class="global-modal-backdrop" style="position:absolute; inset:0; cursor:zoom-out;"></div>
+      <div class="global-card-transform-container" style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; max-width:90vw;">
+        <button class="modal-close" style="position:absolute; top:-18px; right:-18px; width:36px; height:36px; border-radius:50%; background:#1c1a25; border:1px solid #322f3d; color:#fff; font-size:20px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:100;">&times;</button>
+        
+        <div class="card-wrap" style="perspective:1200px; width:460px; max-width:90vw; aspect-ratio:63/88;">
+          <div class="holo-card" id="global-holo-card">
+            <img class="global-modal-img art" src="" alt="Card View" />
+            <div class="layer glare"></div>
+          </div>
+        </div>
+
+        <div class="modal-card-info" style="text-align:center; margin-top:24px; pointer-events:none;">
+          <div class="global-modal-name" style="font-family:'Rajdhani',sans-serif; font-size:26px; font-weight:700; color:#ece8e2;"></div>
+          <div class="global-modal-price" style="font-family:'JetBrains Mono',monospace; color:#f0b93d; font-size:16px; margin-top:6px;"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  const modal = document.getElementById('global-card-modal');
+  const backdrop = modal.querySelector('.global-modal-backdrop');
+  const closeBtn = modal.querySelector('.modal-close');
+  const holoCard = document.getElementById('global-holo-card');
+
+  function resetPosition() {
+    holoCard.style.transition = 'transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s ease';
+    holoCard.style.setProperty('--rot-x', '0deg');
+    holoCard.style.setProperty('--rot-y', '0deg');
+    holoCard.style.setProperty('--dx', '50%');
+    holoCard.style.setProperty('--dy', '50%');
+    holoCard.style.setProperty('--edge', '0');
+    holoCard.style.setProperty('--px', '50%');
+    holoCard.style.setProperty('--py', '50%');
+  }
+
+  let isTicking = false;
+  modal.addEventListener('mousemove', (e) => {
+    if (modal.style.display === 'none') return;
+    
+    if (!isTicking) {
+      window.requestAnimationFrame(() => {
+        const rect = holoCard.getBoundingClientRect();
+        if (rect.width !== 0 && rect.height !== 0) {
+          const px = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+          const py = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+          const cx = px - 50;
+          const cy = py - 50;
+          const edge = Math.min(1, Math.sqrt(cx * cx + cy * cy) / 70);
+
+          holoCard.style.setProperty('--px', px + '%');
+          holoCard.style.setProperty('--py', py + '%');
+          holoCard.style.setProperty('--dx', px + '%');
+          holoCard.style.setProperty('--dy', py + '%');
+          holoCard.style.setProperty('--edge', edge.toFixed(2));
+          holoCard.style.setProperty('--rot-x', (-(cy / 50) * 20) + 'deg');
+          holoCard.style.setProperty('--rot-y', ((cx / 50) * 20) + 'deg');
+          holoCard.style.transition = 'none';
+        }
+        isTicking = false;
+      });
+      isTicking = true;
+    }
+  });
+
+  modal.addEventListener('mouseleave', resetPosition);
+  backdrop.addEventListener('click', hideModal);
+  closeBtn.addEventListener('click', hideModal);
+
+  function hideModal() {
+    modal.style.display = 'none';
+    resetPosition();
+  }
+
+  window.openGlobalCardModal = function(cardOrName, imageUrl, priceLabel, rarityStr) {
+    let card = {};
+    if (typeof cardOrName === 'string') {
+      card = { name: cardOrName, rarity: rarityStr };
+    } else {
+      card = cardOrName || {};
+    }
+    
+    const imgTarget = imageUrl || card.image_large || card.image_small || '';
+    const priceTarget = priceLabel || (card.price_market ? formatPrice(card.price_market, card.currency) : 'n/a');
+
+    document.querySelector('.global-modal-img').src = imgTarget;
+    document.querySelector('.global-modal-name').textContent = card.name || cardOrName || 'Custom Divider / Artwork';
+    document.querySelector('.global-modal-price').textContent = priceTarget;
+
+    const transformContainer = modal.querySelector('.global-card-transform-container');
+    transformContainer.style.transform = 'perspective(1200px) scale(0.9)';
+    modal.style.display = 'flex';
+    
+    requestAnimationFrame(() => {
+      transformContainer.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+      transformContainer.style.transform = 'perspective(1200px) scale(1)';
+    });
+  };
+}
+
+document.addEventListener('DOMContentLoaded', initGlobalCardModal);
+if (document.body) { initGlobalCardModal(); } else { window.addEventListener('load', initGlobalCardModal); }
 
 document.addEventListener('click', () => {
   document.querySelectorAll('.color-picker-dropdown.active').forEach(d => {

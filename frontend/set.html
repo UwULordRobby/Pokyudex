@@ -34,7 +34,8 @@
         <h1 id="set-name">Loading...</h1>
       </div>
       
-      <div style="display:flex; gap:10px; align-items:center;">
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap; justify-content: flex-end;">
+        <input type="text" id="name-search" class="search-bar" placeholder="Search Pokémon..." style="margin-top: 0; width: auto; min-width: 200px; height: 41px; padding: 0 14px;" />
         <select id="type-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 160px; height: 41px; padding: 0 14px;">
           <option value="">-- Any Type --</option>
         </select>
@@ -54,17 +55,12 @@
     </div>
   </div>
 
-  <div id="card-modal" class="modal" onclick="closeModal()">
-    <span class="modal-close">&times;</span>
-    <img class="modal-content" id="modal-img" src="" alt="Card zoom" />
-  </div>
-
   <script src="app.js"></script>
   <script>
     const params = new URLSearchParams(window.location.search);
     const setId = params.get('id');
     let allCards = [];
-    let activeRarity = null;
+    let activeRarities = new Set();
     let usdToEurRate = 0.92;
 
     const RARITY_ORDER = [
@@ -116,10 +112,6 @@
     }
 
     const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
-
-    if (typeof closeModal === 'undefined') {
-      window.closeModal = function() { document.getElementById('card-modal').style.display = "none"; }
-    }
 
     function applyPageTheme(palette) {
       const primary = palette[0];
@@ -210,24 +202,38 @@
     function renderFilters(rarities) {
       const el = document.getElementById('filters');
       el.innerHTML = '';
+      
       const allChip = document.createElement('div');
-      allChip.className = 'chip' + (activeRarity === null ? ' active' : '');
+      allChip.className = 'chip' + (activeRarities.size === 0 ? ' active' : '');
       allChip.textContent = 'All';
-      allChip.onclick = () => { activeRarity = null; renderFilters(rarities); renderCards(); };
+      allChip.onclick = () => { activeRarities.clear(); renderFilters(rarities); renderCards(); };
       el.appendChild(allChip);
 
       rarities.forEach((r) => {
         const chip = document.createElement('div');
-        chip.className = 'chip' + (activeRarity === r ? ' active' : '');
+        chip.className = 'chip' + (activeRarities.has(r) ? ' active' : '');
         chip.textContent = r;
-        chip.onclick = () => { activeRarity = r; renderFilters(rarities); renderCards(); };
+        chip.onclick = () => { 
+            if(activeRarities.has(r)) activeRarities.delete(r);
+            else activeRarities.add(r);
+            renderFilters(rarities); renderCards(); 
+        };
         el.appendChild(chip);
       });
+      
+      if(activeRarities.size > 0) {
+          const deselectBtn = document.createElement('div');
+          deselectBtn.className = 'chip';
+          deselectBtn.style.borderColor = 'var(--danger)';
+          deselectBtn.style.color = 'var(--danger)';
+          deselectBtn.textContent = '✕ Deselect All';
+          deselectBtn.onclick = () => { activeRarities.clear(); renderFilters(rarities); renderCards(); };
+          el.appendChild(deselectBtn);
+      }
     }
 
     function sortCards(cardsArray, criteria) {
       return [...cardsArray].sort((a, b) => {
-        // Riconverte ed allinea i prezzi in EUR prima di eseguire i controlli di ordinamento
         const getPriceInEur = (card) => {
           if (card.price_market == null) return null;
           return card.currency === 'USD' ? card.price_market * usdToEurRate : card.price_market;
@@ -256,8 +262,12 @@
     function renderCards() {
       const container = document.getElementById('cards-container');
       const activeType = document.getElementById('type-select').value;
+      const activeName = document.getElementById('name-search').value.toLowerCase().trim();
+      
       let filtered = allCards;
-      if (activeRarity) filtered = filtered.filter((c) => c.rarity === activeRarity);
+      
+      if (activeName) filtered = filtered.filter((c) => c.name.toLowerCase().includes(activeName));
+      if (activeRarities.size > 0) filtered = filtered.filter((c) => activeRarities.has(c.rarity));
       if (activeType) filtered = filtered.filter((c) => (c.types || '').split(',').includes(activeType));
 
       if (!filtered.length) {
@@ -271,7 +281,6 @@
       const grid = document.createElement('div');
       grid.className = 'cards-grid';
       filtered.forEach((c) => {
-        // Conversione al volo in EUR per i cartellini singoli se la valuta nativa della carta è USD
         let targetPrice = c.price_market;
         let targetCurrency = c.currency;
         if (targetPrice !== null && targetCurrency === 'USD') {
@@ -282,8 +291,10 @@
         const priceLabel = formatPrice(targetPrice, targetCurrency);
         const tile = document.createElement('div');
         tile.className = 'card-tile';
+        tile.id = `card-${c.id}`;
         const bigImgUrl = c.image_large || c.image_small || '';
-        tile.onclick = () => openModal(bigImgUrl);
+        
+        tile.onclick = () => window.openGlobalCardModal(c, bigImgUrl, priceLabel || 'n/a', c.rarity);
 
         tile.innerHTML = `
           <button class="collect-btn ${c.is_owned ? 'owned' : ''}" onclick="event.stopPropagation(); toggleOwn('${c.id}', this)">★</button>
@@ -299,12 +310,29 @@
       });
       container.innerHTML = '';
       container.appendChild(grid);
-    }
 
-    function openModal(imgUrl) {
-      if (!imgUrl) return;
-      document.getElementById('card-modal').style.display = "flex";
-      document.getElementById('modal-img').src = imgUrl;
+      if (!window.hasScrolledToFocus) {
+          const focusId = new URLSearchParams(window.location.search).get('focus');
+          if (focusId) {
+              setTimeout(() => {
+                  const target = document.getElementById('card-' + focusId);
+                  if (target) {
+                      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      target.style.transition = 'box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease';
+                      target.style.boxShadow = '0 0 30px var(--teal)';
+                      target.style.borderColor = 'var(--teal)';
+                      target.style.transform = 'scale(1.03)';
+                      
+                      setTimeout(() => {
+                          target.style.boxShadow = '';
+                          target.style.borderColor = '';
+                          target.style.transform = '';
+                      }, 2500); 
+                  }
+              }, 400); 
+              window.hasScrolledToFocus = true;
+          }
+      }
     }
 
     function populateTypeSelect(cards) {
@@ -351,6 +379,7 @@
 
     document.getElementById('sort-select').addEventListener('change', renderCards);
     document.getElementById('type-select').addEventListener('change', renderCards);
+    document.getElementById('name-search').addEventListener('input', renderCards);
     document.getElementById('about-btn').addEventListener('click', showAboutModal);
 
     async function toggleOwn(cardId, btn) {

@@ -164,8 +164,10 @@
         const priceLabel = formatPrice(targetPrice, targetCurrency);
         const tile = document.createElement('div');
         tile.className = 'card-tile';
+        tile.id = `card-${c.id}`;
         const bigImgUrl = c.image_large || c.image_small || '';
-        tile.onclick = () => openModal(bigImgUrl);
+        
+        tile.onclick = () => window.openGlobalCardModal(c, bigImgUrl, priceLabel || 'n/a', c.rarity);
 
         tile.innerHTML = `
           <button class="collect-btn owned" onclick="event.stopPropagation(); removeCard('${c.id}')">★</button>
@@ -173,7 +175,7 @@
           <div class="price-tag ${priceLabel ? '' : 'no-price'}">${priceLabel || 'n/a'}</div>
           <div class="card-info">
             <div class="card-name">${escapeHtml(c.name)}${c.card_number ? ' · #' + escapeHtml(c.card_number) : ''}</div>
-            <div class="card-rarity" style="color: var(--gold); font-weight:600; margin-bottom:2px;">${escapeHtml(c.set_name)}</div>
+            <div class="card-rarity set-name-link" title="Go to ${escapeHtml(c.set_name || 'Set')}" style="color: var(--gold); font-weight:600; margin-bottom:2px; cursor:pointer;" onclick="event.stopPropagation(); window.location.href='set.html?id=${encodeURIComponent(c.set_id)}&focus=${encodeURIComponent(c.id)}'">${escapeHtml(c.set_name || 'Unknown set')}</div>
             <div class="card-rarity">${escapeHtml(c.rarity || 'Unknown rarity')}</div>
           </div>
         `;

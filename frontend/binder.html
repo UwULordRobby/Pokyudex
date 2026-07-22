@@ -92,7 +92,6 @@
       font-size: 13px;
     }
 
-    /* FIXED RIGID HEADER GRID TWEAK */
     .binder-header { 
       display: grid; 
       grid-template-columns: 1fr auto; 
@@ -199,82 +198,6 @@
     .binder-slot[draggable="true"]:hover img { filter: brightness(1.08); }
     .binder-slot img { transition: filter 0.15s ease; }
 
-    #card-modal {
-      z-index: 2000;
-      position: fixed;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 40px;
-    }
-    #card-modal.active { display: flex; }
-    #card-modal .modal-backdrop {
-      position: absolute;
-      inset: 0;
-      background: rgba(8, 7, 12, 0.92);
-      backdrop-filter: blur(4px);
-      opacity: 0;
-      transition: opacity 0.25s ease;
-      cursor: zoom-out;
-    }
-    #card-modal.active .modal-backdrop { opacity: 1; }
-
-    .modal-card-frame {
-      position: relative;
-      z-index: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      transform: scale(0.85);
-      opacity: 0;
-      transition: transform 0.28s cubic-bezier(.2,.8,.2,1), opacity 0.22s ease;
-      max-width: 90vw;
-    }
-    #card-modal.active .modal-card-frame { transform: scale(1); opacity: 1; }
-
-    .modal-card-frame .modal-content {
-      max-height: 76vh;
-      max-width: 90vw;
-      border-radius: 16px;
-      box-shadow: 0 30px 80px rgba(0,0,0,0.8);
-      display: block;
-    }
-
-    .modal-card-info { text-align: center; margin-top: 16px; }
-    .modal-card-name {
-      font-family: 'Rajdhani', sans-serif;
-      font-size: 22px;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .modal-card-price {
-      font-family: 'JetBrains Mono', monospace;
-      color: var(--gold);
-      font-size: 14px;
-      margin-top: 4px;
-    }
-
-    .modal-close {
-      position: absolute;
-      top: -18px;
-      right: -18px;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: var(--panel, #1c1a25);
-      border: 1px solid var(--border, #333);
-      color: var(--text, #fff);
-      font-size: 20px;
-      line-height: 1;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.15s ease;
-    }
-    .modal-close:hover { background: var(--danger, #e5484d); color: #fff; border-color: var(--danger, #e5484d); }
-
     .crop-viewport-box {
       position: relative;
       overflow: hidden;
@@ -369,7 +292,6 @@
           <div id="active-meta" class="eyebrow" style="margin-top:4px;"></div>
         </div>
         
-        <!-- TWEAKED RIGID RIGID NAVIGATION AND LAYOUT CONTROLS COLUMN -->
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px;">
           <div style="display: flex; gap: 8px; align-items: center;">
             <div class="chip active" id="view-single-btn" style="margin:0;">Single Page</div>
@@ -463,18 +385,6 @@
       </div>
 
       <div id="modal-results-container"></div>
-    </div>
-  </div>
-
-  <div id="card-modal" class="modal">
-    <div class="modal-backdrop" onclick="closeModal()"></div>
-    <div class="modal-card-frame">
-      <button class="modal-close" onclick="closeModal()">&times;</button>
-      <img class="modal-content" id="modal-img" src="" alt="Enlarged item" />
-      <div class="modal-card-info">
-        <div class="modal-card-name" id="modal-card-name"></div>
-        <div class="modal-card-price" id="modal-card-price"></div>
-      </div>
     </div>
   </div>
 
@@ -1004,8 +914,8 @@
             <img src="${escapeHtml(c.image_small)}" alt="${escapeHtml(c.name)}" loading="lazy">
             <div class="card-info">
               <div class="card-name">${escapeHtml(c.name)} (${escapeHtml(c.card_number)})</div>
+              <div class="card-rarity set-name-link" title="Go to ${escapeHtml(c.set_name || 'Set')}" style="color:var(--teal); text-transform:none; cursor:pointer;" onclick="event.stopPropagation(); window.location.href='set.html?id=${encodeURIComponent(c.set_id)}&focus=${encodeURIComponent(c.id)}'">${escapeHtml(c.set_name || 'Unknown set')}</div>
               <div class="card-rarity">${escapeHtml(c.rarity || 'Rarity n/a')}</div>
-              <div class="card-rarity" style="color:var(--teal); text-transform:none;">${escapeHtml(c.set_name || 'Unknown set')}</div>
               <div style="font-family:'JetBrains Mono'; font-size:10px; color:var(--gold); margin-top:4px;">${priceLabel}</div>
             </div>
           `;
@@ -1087,7 +997,7 @@
             <img src="${escapeHtml(c.image_small)}" alt="${escapeHtml(c.name)}" loading="lazy">
             <div class="card-info">
               <div class="card-name">${escapeHtml(c.name)} (${escapeHtml(c.card_number || 'N/A')})</div>
-              <div class="card-rarity" style="color:var(--teal); text-transform:none;">${escapeHtml(c.set_name || 'Unknown set')}</div>
+              <div class="card-rarity set-name-link" title="Go to ${escapeHtml(c.set_name || 'Set')}" style="color:var(--teal); text-transform:none; cursor:pointer;" onclick="event.stopPropagation(); window.location.href='set.html?id=${encodeURIComponent(c.set_id)}&focus=${encodeURIComponent(c.id)}'">${escapeHtml(c.set_name || 'Unknown set')}</div>
               <div style="font-family:'JetBrains Mono'; font-size:10px; color:var(--gold); margin-top:4px;">${formatPrice(c.price_market, c.currency) || 'n/a'}</div>
             </div>
           `;
@@ -1236,8 +1146,14 @@
           tile.addEventListener('pointerdown', (e) => { startX = e.clientX; startY = e.clientY; });
           tile.addEventListener('pointerup', (e) => {
             if (e.target.closest('.slot-remove-btn')) return; 
+            
             if (Math.abs(e.clientX - startX) < 5 && Math.abs(e.clientY - startY) < 5) {
-              openModal(cardData);
+              window.openGlobalCardModal(
+                cardData, 
+                cardData.custom_image_url || cardData.image_large || cardData.image_small, 
+                cardData.custom_image_url ? 'Custom Content' : formatPrice(cardData.price_market, cardData.currency),
+                cardData.rarity
+              );
             }
           });
           
@@ -1373,24 +1289,6 @@
         await api(`/api/binders/${currentBinderId}`, { method: 'DELETE' });
         closeActiveBinder();
       }
-    }
-
-    function openModal(cardData) {
-      const modal = document.getElementById('card-modal');
-      const img = document.getElementById('modal-img');
-      const nameEl = document.getElementById('modal-card-name');
-      const priceEl = document.getElementById('modal-card-price');
-      img.src = cardData.custom_image_url || cardData.image_large || cardData.image_small || '';
-      nameEl.textContent = cardData.name || 'Custom Divider / Artwork';
-      priceEl.textContent = cardData.custom_image_url ? 'Custom Content' : (formatPrice(cardData.price_market, cardData.currency) || 'n/a');
-      modal.style.display = 'flex';
-      requestAnimationFrame(() => modal.classList.add('active'));
-    }
-
-    window.closeModal = function() {
-      const modal = document.getElementById('card-modal');
-      modal.classList.remove('active');
-      setTimeout(() => { if (!modal.classList.contains('active')) modal.style.display = 'none'; }, 250);
     }
 
     let searchDebounceTimer;

@@ -21,7 +21,6 @@
     #favorites-container .set-tile.dragging { opacity: 0.4; }
     #favorites-container .set-tile.drag-over { border-color: var(--gold); box-shadow: 0 0 15px rgba(240, 185, 61, 0.35); }
     
-    /* Styles for the Era separator */
     .era-separator-header {
       margin: 40px 0 16px 0;
       border-bottom: 1px solid var(--border);
@@ -78,7 +77,7 @@
         <div id="favorites-container"></div>
       </div>
 
-      <input type="text" class="search-bar" id="search-input" placeholder="Search a set, e.g. Noble Victories..." />
+      <input type="text" class="search-bar" id="search-input" placeholder="Search a set or a Pokémon name..." />
       <div id="sets-container" style="margin-top: 20px;">
         <div class="state-msg"><span class="spinner"></span>Loading sets...</div>
       </div>
@@ -112,11 +111,6 @@
         <div class="state-msg">Enter a card name or select a rarity to get started.</div>
       </div>
     </div>
-  </div>
-
-  <div id="card-modal" class="modal" onclick="closeModal()">
-    <span class="modal-close">&times;</span>
-    <img class="modal-content" id="modal-img" src="" alt="Card zoom" />
   </div>
 
   <script src="app.js"></script>
@@ -154,21 +148,45 @@
       if (!typesLoaded) { loadGlobalTypes(); }
     });
 
-    function renderSetsPage() {
-      const query = document.getElementById('search-input').value.toLowerCase();
-      const filteredSets = allSets.filter((s) => s.name.toLowerCase().includes(query));
-      const favoriteSets = allSets
-        .filter((s) => s.is_favorite)
-        .sort((a, b) => (a.fav_sort_order ?? 0) - (b.fav_sort_order ?? 0));
+    async function executeSetSearch() {
+      const query = document.getElementById('search-input').value.toLowerCase().trim();
       const favSection = document.getElementById('favorites-section');
+      const container = document.getElementById('sets-container');
       
-      if (favoriteSets.length > 0 && !query) {
-        favSection.style.display = 'block';
-        renderFavoritesGrid(favoriteSets, document.getElementById('favorites-container'));
-      } else {
-        favSection.style.display = 'none';
+      if (!query) {
+         const favoriteSets = allSets.filter(s => s.is_favorite).sort((a, b) => (a.fav_sort_order ?? 0) - (b.fav_sort_order ?? 0));
+         if (favoriteSets.length > 0) {
+           favSection.style.display = 'block';
+           renderFavoritesGrid(favoriteSets, document.getElementById('favorites-container'));
+         } else {
+           favSection.style.display = 'none';
+         }
+         renderSetsGrid(allSets, container);
+         return;
       }
-      renderSetsGrid(filteredSets, document.getElementById('sets-container'));
+
+      favSection.style.display = 'none';
+      let matchedSets = allSets.filter(s => s.name.toLowerCase().includes(query));
+      
+      try {
+          if (matchedSets.length === 0) container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Searching deep...</div>';
+          const cards = await api(`/api/cards/search?name=${encodeURIComponent(query)}`);
+          const setIdsFromCards = new Set(cards.map(c => c.set_id));
+          const extraSets = allSets.filter(s => setIdsFromCards.has(s.id) && !matchedSets.includes(s));
+          matchedSets = [...matchedSets, ...extraSets];
+      } catch(err) {}
+
+      renderSetsGrid(matchedSets, container);
+    }
+
+    let searchDebounce;
+    document.getElementById('search-input').addEventListener('input', () => {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(executeSetSearch, 400);
+    });
+
+    function renderSetsPage() {
+       executeSetSearch();
     }
 
     function renderFavoritesGrid(sets, container) {
@@ -322,7 +340,6 @@
       }
     }
 
-    document.getElementById('search-input').addEventListener('input', () => { renderSetsPage(); });
     document.getElementById('about-btn').addEventListener('click', showAboutModal);
 
     function initAdminResync(user) {
@@ -462,8 +479,10 @@
         const priceLabel = formatPrice(c.price_market, c.currency);
         const tile = document.createElement('div');
         tile.className = 'card-tile';
+        tile.id = 'card-' + c.id;
         const bigImgUrl = c.image_large || c.image_small || '';
-        tile.onclick = () => openModal(bigImgUrl);
+        
+        tile.onclick = () => window.openGlobalCardModal(c, bigImgUrl, priceLabel || 'n/a', c.rarity);
 
         tile.innerHTML = `
           <button class="collect-btn ${c.is_owned ? 'owned' : ''}" onclick="event.stopPropagation(); toggleOwn('${c.id}', this)">★</button>
@@ -472,7 +491,7 @@
           <div class="price-tag ${priceLabel ? '' : 'no-price'}">${priceLabel || 'n/a'}</div>
           <div class="card-info">
             <div class="card-name">${escapeHtml(c.name)}${c.card_number ? ' · #' + escapeHtml(c.card_number) : ''}</div>
-            <div class="card-rarity" style="color: var(--teal); font-weight: 600; margin-bottom: 2px;">${escapeHtml(c.set_name || 'Unknown set')}</div>
+            <div class="card-rarity set-name-link" title="Go to ${escapeHtml(c.set_name || 'Set')}" style="color: var(--teal); font-weight: 600; margin-bottom: 2px; cursor:pointer;" onclick="event.stopPropagation(); window.location.href='set.html?id=${encodeURIComponent(c.set_id)}&focus=${encodeURIComponent(c.id)}'">${escapeHtml(c.set_name || 'Unknown set')}</div>
             <div class="card-rarity">${escapeHtml(c.rarity || 'Unknown rarity')}</div>
           </div>
         `;
@@ -545,18 +564,6 @@
         renderSetsPage();
       } catch (err) { alert(err.message); }
     }
-
-    /* Enlargement functions restored correctly */
-    function openModal(imgUrl) {
-      if (!imgUrl) return;
-      document.getElementById('card-modal').style.display = "flex";
-      document.getElementById('modal-img').src = imgUrl;
-    }
-    
-    function closeModal() {
-      document.getElementById('card-modal').style.display = "none";
-    }
-    window.closeModal = closeModal;
 
     requireAuth().then(user => {
       if (user) {

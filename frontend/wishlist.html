@@ -51,7 +51,7 @@
       </div>
     </div>
 
-    <!-- STICKY BORDERLESS BOARDS CONTAINER (FIXED NEW BOARD ACTION TWEAK) -->
+    <!-- STICKY BORDERLESS BOARDS CONTAINER -->
     <div id="boards-section">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <div class="section-title" style="margin: 0;">Your Boards</div>
@@ -163,11 +163,6 @@
     </div>
   </div>
 
-  <div id="card-modal" class="modal" onclick="closeModal()">
-    <span class="modal-close">&times;</span>
-    <img class="modal-content" id="modal-img" src="" alt="Zoom" />
-  </div>
-
   <script src="app.js"></script>
   <script>
     renderBloomLayer([
@@ -254,9 +249,10 @@
         tile.draggable = true;
         tile.dataset.cardId = c.id;
         const bigImgUrl = c.image_large || c.image_small || '';
+        
         tile.onclick = () => {
           if (tile.classList.contains('dragging-suppress-click')) { tile.classList.remove('dragging-suppress-click'); return; }
-          openModal(bigImgUrl);
+          window.openGlobalCardModal(c, bigImgUrl, priceLabel || 'n/a', c.rarity);
         };
 
         tile.innerHTML = `
@@ -265,7 +261,7 @@
           <div class="price-tag ${priceLabel ? '' : 'no-price'}">${priceLabel || 'n/a'}</div>
           <div class="card-info">
             <div class="card-name">${escapeHtml(c.name)}${c.card_number ? ' · #' + escapeHtml(c.card_number) : ''}</div>
-            <div class="card-rarity" style="color: var(--teal); font-weight:600; margin-bottom:2px;">${escapeHtml(c.set_name)}</div>
+            <div class="card-rarity set-name-link" title="Go to ${escapeHtml(c.set_name || 'Set')}" style="color: var(--teal); font-weight:600; margin-bottom:2px; cursor:pointer;" onclick="event.stopPropagation(); window.location.href='set.html?id=${encodeURIComponent(c.set_id)}&focus=${encodeURIComponent(c.id)}'">${escapeHtml(c.set_name || 'Unknown set')}</div>
             <div class="card-rarity">${escapeHtml(c.rarity || 'Unknown rarity')}</div>
           </div>
         `;
@@ -317,13 +313,6 @@
     }
 
     document.getElementById('sort-select').addEventListener('change', renderWishlist);
-
-    function openModal(imgUrl) {
-      if (!imgUrl) return;
-      document.getElementById('card-modal').style.display = "flex";
-      document.getElementById('modal-img').src = imgUrl;
-    }
-    window.closeModal = function() { document.getElementById('card-modal').style.display = "none"; }
 
     async function loadBoards() {
       try {
@@ -471,7 +460,7 @@
           document.getElementById('board-detail-title').textContent = name;
           document.getElementById('stats-header-title').textContent = name;
         }
-      } catch (err) { alert(err.message); }
+      } catch (err) {}
     }
 
     async function deleteBoardById(boardId) {
@@ -561,9 +550,10 @@
         tile.className = 'card-tile';
         tile.draggable = isManualOrder;
         tile.dataset.cardId = c.id;
+        
         tile.onclick = () => {
           if (tile.classList.contains('dragging-suppress-click')) { tile.classList.remove('dragging-suppress-click'); return; }
-          openModal(c.image_large || c.image_small || '');
+          window.openGlobalCardModal(c, c.image_large || c.image_small || '', priceLabel || 'n/a', c.rarity);
         };
         tile.innerHTML = `
           <button class="card-tile-small-remove" title="Remove from board" onclick="event.stopPropagation(); removeCardFromCurrentBoard('${c.id}')">✕</button>
@@ -571,7 +561,7 @@
           <div class="price-tag ${priceLabel ? '' : 'no-price'}">${priceLabel || 'n/a'}</div>
           <div class="card-info">
             <div class="card-name">${escapeHtml(c.name)}${c.card_number ? ' · #' + escapeHtml(c.card_number) : ''}</div>
-            <div class="card-rarity" style="color: var(--teal); font-weight:600; margin-bottom:2px;">${escapeHtml(c.set_name)}</div>
+            <div class="card-rarity set-name-link" title="Go to ${escapeHtml(c.set_name || 'Set')}" style="color: var(--teal); font-weight:600; margin-bottom:2px; cursor:pointer;" onclick="event.stopPropagation(); window.location.href='set.html?id=${encodeURIComponent(c.set_id)}&focus=${encodeURIComponent(c.id)}'">${escapeHtml(c.set_name || 'Unknown set')}</div>
             <div class="card-rarity">${escapeHtml(c.rarity || 'Unknown rarity')}</div>
           </div>
         `;
@@ -681,7 +671,7 @@
           <div class="price-tag ${priceLabel ? '' : 'no-price'}">${priceLabel || 'n/a'}</div>
           <div class="card-info">
             <div class="card-name">${escapeHtml(c.name)}${c.card_number ? ' · #' + escapeHtml(c.card_number) : ''}</div>
-            <div class="card-rarity" style="color: var(--teal); font-weight:600; margin-bottom:2px;">${escapeHtml(c.set_name)}</div>
+            <div class="card-rarity set-name-link" title="Go to ${escapeHtml(c.set_name || 'Set')}" style="color: var(--teal); font-weight:600; margin-bottom:2px; cursor:pointer;" onclick="event.stopPropagation(); window.location.href='set.html?id=${encodeURIComponent(c.set_id)}&focus=${encodeURIComponent(c.id)}'">${escapeHtml(c.set_name || 'Unknown set')}</div>
             <div class="card-rarity">${escapeHtml(c.rarity || 'Unknown rarity')}</div>
           </div>
         `;
