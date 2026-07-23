@@ -39,7 +39,7 @@
       color: var(--text-muted);
       margin-bottom: 6px;
     }
-    .auth-field input {
+    .auth-field input:not([type="checkbox"]) {
       width: 100%;
       padding: 10px 14px;
       border-radius: var(--radius);
@@ -49,7 +49,7 @@
       font-family: 'Inter', sans-serif;
       font-size: 14px;
     }
-    .auth-field input:focus { outline: none; border-color: var(--teal); }
+    .auth-field input:not([type="checkbox"]):focus { outline: none; border-color: var(--teal); }
     .auth-submit { width: 100%; margin-top: 6px; height: 42px; }
     .auth-switch {
       text-align: center;
@@ -100,6 +100,13 @@
           <label>Confirm Password</label>
           <input type="password" id="auth-password-confirm" autocomplete="new-password" minlength="8" />
         </div>
+        
+        <!-- Nuova Checkbox Remember Me -->
+        <div class="auth-field" style="display: flex; align-items: center; gap: 8px; margin-top: 10px; margin-bottom: 20px;">
+          <input type="checkbox" id="auth-remember" style="width: auto; margin: 0; cursor: pointer;" />
+          <label for="auth-remember" style="margin: 0; cursor: pointer;">Remember me</label>
+        </div>
+
         <button type="submit" class="btn btn-accent auth-submit" id="auth-submit-btn">Sign In</button>
       </form>
 
@@ -125,6 +132,7 @@
     const passwordHint = document.getElementById('password-hint');
     const usernameField = document.getElementById('username-field');
     const usernameInput = document.getElementById('auth-username');
+    const rememberCheckbox = document.getElementById('auth-remember');
 
     function showError(msg) {
       errorBox.textContent = msg;
@@ -174,6 +182,7 @@
       const email = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value;
       const username = usernameInput.value.trim();
+      const remember = rememberCheckbox.checked;
 
       if (mode === 'register') {
         if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
@@ -193,7 +202,7 @@
       submitBtn.disabled = true;
       try {
         const endpoint = mode === 'login' ? '/api/login' : '/api/register';
-        const body = mode === 'login' ? { email, password } : { email, username, password };
+        const body = mode === 'login' ? { email, password, remember } : { email, username, password, remember };
         await api(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

@@ -221,6 +221,11 @@
           <a href="binder.html" class="side-menu-link">📁 Binders</a>
           <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
           <a href="collezione.html" class="side-menu-link">★ My Collection</a>
+          <!-- VOCI MENU SOLO MOBILE -->
+          <div class="mobile-only-menu-items">
+            <a href="#" class="side-menu-link" onclick="if(typeof showAboutModal === 'function') showAboutModal()">👤 About</a>
+            <a href="#" class="side-menu-link" style="color: var(--danger);" onclick="logoutUser()">🚪 Logout</a>
+          </div>
         </div>
       </div>
       <a href="index.html" class="icon-btn" aria-label="Home" title="Home">🏠</a>
@@ -238,44 +243,53 @@
 
     <div class="creator-panel">
       <div class="eyebrow" style="color: var(--gold)">New Project</div>
-      <div style="display: flex; flex-wrap: wrap; align-items: flex-end;">
-        <div class="form-group">
-          <label>Binder Name</label>
-          <input type="text" id="b-name" placeholder="E.g. Base Set 1999, Shiny, ex..." />
-        </div>
-        <div class="form-group">
-          <label>Layout Type</label>
-          <select id="b-type" onchange="document.getElementById('size-selectors').style.display = this.value==='pokedex'?'none':'inline-flex'">
-            <option value="custom">Custom Binder</option>
-            <option value="pokedex">Master National Pokédex (1025 slots)</option>
-          </select>
-        </div>
-        <div id="size-selectors" style="display: inline-flex;">
-          <div class="form-group">
-            <label>Rows</label>
-            <input type="number" id="b-rows" value="3" min="1" max="5" style="width: 70px;" />
+      <div style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;">
+        
+        <!-- RIGA 1: Dati base e Dimensioni -->
+        <div style="display: flex; flex-wrap: wrap; gap: 14px; width: 100%;">
+          <div class="form-group" style="margin: 0;">
+            <label>Binder Name</label>
+            <input type="text" id="b-name" placeholder="E.g. Base Set 1999, Shiny, ex..." />
           </div>
-          <div class="form-group">
-            <label>Columns</label>
-            <input type="number" id="b-cols" value="3" min="1" max="5" style="width: 70px;" />
+          <div class="form-group" style="margin: 0;">
+            <label>Layout Type</label>
+            <select id="b-type" onchange="document.getElementById('size-selectors').style.display = this.value==='pokedex'?'none':'inline-flex'">
+              <option value="custom">Custom Binder</option>
+              <option value="pokedex">Master National Pokédex (1025 slots)</option>
+            </select>
+          </div>
+          <div id="size-selectors" style="display: inline-flex; gap: 14px;">
+            <div class="form-group" style="margin: 0;">
+              <label>Rows</label>
+              <input type="number" id="b-rows" value="3" min="1" max="5" style="width: 70px;" />
+            </div>
+            <div class="form-group" style="margin: 0;">
+              <label>Columns</label>
+              <input type="number" id="b-cols" value="3" min="1" max="5" style="width: 70px;" />
+            </div>
           </div>
         </div>
-        <div class="form-group">
-          <label>Cover Color</label>
-          <div id="b-color-picker"></div>
-          <input type="hidden" id="b-color" value="#1c1a25" />
+
+        <!-- RIGA 2: Colori e Pulsante a capo -->
+        <div style="display: flex; flex-wrap: wrap; gap: 14px; width: 100%; align-items: flex-end;">
+          <div class="form-group" style="margin: 0;">
+            <label>Cover Color</label>
+            <div id="b-color-picker"></div>
+            <input type="hidden" id="b-color" value="#1c1a25" />
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label>Page Matting</label>
+            <div id="b-inner-color-picker"></div>
+            <input type="hidden" id="b-inner-color" value="#1c1a25" />
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label>Grid Panel</label>
+            <div id="b-panel-color-picker"></div>
+            <input type="hidden" id="b-panel-color" value="#16141d" />
+          </div>
+          <button class="btn btn-accent" onclick="createNewBinder()" style="height: 38px; margin-bottom: 2px;">Create Album</button>
         </div>
-        <div class="form-group">
-          <label>Page Matting</label>
-          <div id="b-inner-color-picker"></div>
-          <input type="hidden" id="b-inner-color" value="#1c1a25" />
-        </div>
-        <div class="form-group">
-          <label>Grid Panel</label>
-          <div id="b-panel-color-picker"></div>
-          <input type="hidden" id="b-panel-color" value="#16141d" />
-        </div>
-        <button class="btn btn-accent" onclick="createNewBinder()" style="height: 37px; margin-bottom: 10px;">Create Album</button>
+
       </div>
     </div>
 
@@ -385,6 +399,39 @@
       </div>
 
       <div id="modal-results-container"></div>
+    </div>
+  </div>
+
+  <!-- FIX MODAL: EDIT BINDER COMPLETO -->
+  <div id="edit-binder-modal" class="modal" onclick="closeEditBinderModal()">
+    <div class="about-card" onclick="event.stopPropagation()" style="max-width:360px; max-height: 90vh; overflow-y: auto;">
+      <button class="modal-close" onclick="closeEditBinderModal()">&times;</button>
+      <div class="eyebrow" style="color: var(--gold);">Edit Binder</div>
+
+      <div class="form-group" style="width:100%; margin:14px 0;">
+        <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Name</label>
+        <input type="text" id="edit-b-name" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);" />
+      </div>
+
+      <div style="display:flex; gap: 14px; flex-wrap: wrap; margin-bottom: 24px;">
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Cover</label>
+          <div id="edit-b-color-picker"></div>
+          <input type="hidden" id="edit-b-color" />
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Inner</label>
+          <div id="edit-b-inner-color-picker"></div>
+          <input type="hidden" id="edit-b-inner-color" />
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:12px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); display:block; margin-bottom:6px;">Panel</label>
+          <div id="edit-b-panel-color-picker"></div>
+          <input type="hidden" id="edit-b-panel-color" />
+        </div>
+      </div>
+
+      <button class="btn btn-accent" style="width:100%;" onclick="saveEditBinder()">Save Changes</button>
     </div>
   </div>
 
@@ -618,10 +665,7 @@
       if (!b) return;
       editingBinderId = id;
       document.getElementById('edit-b-name').value = b.name;
-      document.getElementById('edit-b-color').value = b.color;
-      document.getElementById('edit-b-inner-color').value = b.inner_color || b.color;
-      document.getElementById('edit-b-panel-color').value = b.panel_color || '#16141d';
-
+      
       if (editBColorPicker) editBColorPicker.setValue(b.color);
       if (editBInnerColorPicker) editBInnerColorPicker.setValue(b.inner_color || b.color);
       if (editBPanelColorPicker) editBPanelColorPicker.setValue(b.panel_color || '#16141d');
@@ -640,7 +684,7 @@
       const panel_color = document.getElementById('edit-b-panel-color').value;
       if (!name) { alert('Name cannot be empty.'); return; }
       try {
-        const updated = await api(`/api/edit-binder-modal/${editingBinderId}`, {
+        const updated = await api(`/api/binders/${editingBinderId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, color, inner_color, panel_color })

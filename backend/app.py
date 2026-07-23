@@ -5,14 +5,17 @@ import time
 from functools import wraps
 from pathlib import Path
 import uuid
-from config import USD_TO_EUR_RATE
+
+# Richiede: pip install Pillow
+from PIL import Image, UnidentifiedImageError
 
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
 import pokemon_api
-from config import DEBUG, HOST, PORT, SECRET_KEY
+# Importata MAX_CONTENT_LENGTH dalla config
+from config import DEBUG, HOST, PORT, SECRET_KEY, USD_TO_EUR_RATE, MAX_CONTENT_LENGTH
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
@@ -20,7 +23,12 @@ app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path="")
 app.secret_key = SECRET_KEY
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = not DEBUG  # Cookie sicuri solo in produzione
 app.config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(days=30)
+app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH  # Limite dimensione body (5MB)
+
+# Inizializza il DB all'avvio, non ad ogni richiesta
+db.init_db()
 
 _preload_lock = threading.Lock()
 _preload_running = False
@@ -28,39 +36,53 @@ _preload_running = False
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,20}$")
 _HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 _attempt_lock = threading.Lock()
 _failed_attempts: dict[str, list[float]] = {}
 _RATE_LIMIT_WINDOW_SECONDS = 5 * 60
 _RATE_LIMIT_MAX_ATTEMPTS = 5
 
+@app.after_request
+def add_security_headers(response):
+    """Inietta header di sicurezza per prevenire XSS, Clickjacking e sniffing."""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    
+    if not DEBUG:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    
+    # Content Security Policy adattata per i domini esterni usati
+    # Content Security Policy adattata per i domini esterni usati
+    csp = (
+        "default-src 'self'; "
+        "img-src 'self' data: https: http:; " 
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "script-src 'self' 'unsafe-inline';"
+    )
+    response.headers['Content-Security-Policy'] = csp
+    return response
 
 def _rate_limit_key() -> str:
-    return request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",")[0].strip()
+    # Ignora X-Forwarded-For per prevenire lo spoofing
+    # Nota: se usi un reverse proxy (Nginx), abilita Werkzeug ProxyFix.
+    return request.remote_addr or "unknown"
 
-
-def _is_rate_limited(key: str) -> bool:
+def _is_rate_limited(key: str, max_attempts: int = _RATE_LIMIT_MAX_ATTEMPTS, window: int = _RATE_LIMIT_WINDOW_SECONDS) -> bool:
     now = time.time()
     with _attempt_lock:
-        attempts = [t for t in _failed_attempts.get(key, []) if now - t < _RATE_LIMIT_WINDOW_SECONDS]
+        attempts = [t for t in _failed_attempts.get(key, []) if now - t < window]
         _failed_attempts[key] = attempts
-        return len(attempts) >= _RATE_LIMIT_MAX_ATTEMPTS
+        return len(attempts) >= max_attempts
 
-
-def _record_failed_attempt(key: str):
+def _record_attempt(key: str):
     with _attempt_lock:
         _failed_attempts.setdefault(key, []).append(time.time())
-
 
 def _clear_failed_attempts(key: str):
     with _attempt_lock:
         _failed_attempts.pop(key, None)
-
-
-@app.before_request
-def _ensure_db():
-    db.init_db()
-
 
 def login_required(view_func):
     @wraps(view_func)
@@ -76,8 +98,11 @@ def api_exchange_rate():
     return jsonify({"usd_to_eur": USD_TO_EUR_RATE})
 
 def _is_admin(user_id) -> bool:
-    return user_id == 1
-
+    # Verifica il flag sul database invece di un ID fisso. 
+    # Usiamo user["is_admin"] perché sqlite3.Row non ha il metodo .get()
+    with db.get_conn() as conn:
+        user = db.get_user_by_id(conn, user_id)
+        return bool(user and user["is_admin"])
 
 def admin_required(view_func):
     @wraps(view_func)
@@ -89,26 +114,33 @@ def admin_required(view_func):
         return view_func(*args, **kwargs)
     return wrapped
 
-
-@app.route("/api/upload", methods=["GET", "POST"])
+@app.route("/api/upload", methods=["POST"])
 @login_required
 def api_upload_file():
-    if request.method == "GET":
-        return jsonify({"error": "Invalid request. Use POST to upload a file"}), 405
-
     if "file" not in request.files:
         return jsonify({"error": "No file sent"}), 400
+        
     file = request.files["file"]
     if file.filename == "":
         return jsonify({"error": "No file selected"}), 400
-    if file:
-        uploads_dir = FRONTEND_DIR / "uploads"
-        uploads_dir.mkdir(parents=True, exist_ok=True)
-        ext = Path(file.filename).suffix or ".png"
-        filename = f"{uuid.uuid4().hex}{ext}"
-        file.save(str(uploads_dir / filename))
-        return jsonify({"url": f"uploads/{filename}"})
+        
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return jsonify({"error": "Extension not allowed"}), 400
 
+    try:
+        # Verifica tramite Pillow che il contenuto sia effettivamente un'immagine valida
+        img = Image.open(file.stream)
+        img.verify()
+        file.stream.seek(0) # Resetta il puntatore dopo il verify
+    except (UnidentifiedImageError, Exception):
+        return jsonify({"error": "Invalid image file format"}), 400
+
+    uploads_dir = FRONTEND_DIR / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}{ext}"
+    file.save(str(uploads_dir / filename))
+    return jsonify({"url": f"uploads/{filename}"})
 
 # ---------- Authentication ----------
 
@@ -121,7 +153,6 @@ def _password_error(password: str) -> str | None:
         return "Password must contain at least one number"
     return None
 
-
 @app.route("/api/register", methods=["POST"])
 def api_register():
     rl_key = _rate_limit_key()
@@ -132,42 +163,44 @@ def api_register():
     email = (data.get("email") or "").strip().lower()
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
+    remember = data.get("remember", False)
 
     if not EMAIL_RE.match(email):
-        _record_failed_attempt(rl_key)
+        _record_attempt(rl_key)
         return jsonify({"error": "Please enter a valid email address"}), 400
 
     if not USERNAME_RE.match(username):
-        _record_failed_attempt(rl_key)
+        _record_attempt(rl_key)
         return jsonify({"error": "Username must be 3-20 characters: letters, numbers, or underscore"}), 400
 
     password_error = _password_error(password)
     if password_error:
-        _record_failed_attempt(rl_key)
+        _record_attempt(rl_key)
         return jsonify({"error": password_error}), 400
 
     with db.get_conn() as conn:
         if db.get_user_by_email(conn, email):
-            _record_failed_attempt(rl_key)
+            _record_attempt(rl_key)
             return jsonify({"error": "An account with this email already exists"}), 409
 
         if db.get_user_by_username(conn, username):
-            _record_failed_attempt(rl_key)
+            _record_attempt(rl_key)
             return jsonify({"error": "This username is already taken"}), 409
 
         is_first_user = db.count_users(conn) == 0
         password_hash = generate_password_hash(password)
-        user_id = db.create_user(conn, email, username, password_hash)
+        # Il primo utente viene automaticamente promosso admin
+        is_admin_flag = 1 if is_first_user else 0
+        user_id = db.create_user(conn, email, username, password_hash, is_admin_flag)
 
         if is_first_user:
             db.claim_legacy_data(conn, user_id)
 
     session.clear()
     session["user_id"] = user_id
-    session.permanent = True
+    session.permanent = bool(remember)
     _clear_failed_attempts(rl_key)
     return jsonify({"id": user_id, "email": email, "username": username})
-
 
 @app.route("/api/login", methods=["POST"])
 def api_login():
@@ -178,20 +211,20 @@ def api_login():
     data = request.json or {}
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
+    remember = data.get("remember", False)
 
     with db.get_conn() as conn:
         user = db.get_user_by_email(conn, email)
 
     if not user or not check_password_hash(user["password_hash"], password):
-        _record_failed_attempt(rl_key)
+        _record_attempt(rl_key)
         return jsonify({"error": "Incorrect email or password"}), 401
 
     session.clear()
     session["user_id"] = user["id"]
-    session.permanent = True
+    session.permanent = bool(remember)
     _clear_failed_attempts(rl_key)
     return jsonify({"id": user["id"], "email": user["email"], "username": user["username"]})
-
 
 @app.route("/api/logout", methods=["POST"])
 def api_logout():
@@ -199,7 +232,6 @@ def api_logout():
     return jsonify({"success": True})
 
 ALLOWED_AVATAR_IDS = set(range(1, 152)) | {196, 197, 470, 471, 700, 778}
-
 
 @app.route("/api/me")
 def api_me():
@@ -219,7 +251,6 @@ def api_me():
         "avatar_pokemon_id": user["avatar_pokemon_id"],
     }})
 
-
 @app.route("/api/me/avatar", methods=["POST"])
 @login_required
 def api_set_avatar():
@@ -234,14 +265,12 @@ def api_set_avatar():
         conn.execute("UPDATE users SET avatar_pokemon_id = ? WHERE id = ?", (pokemon_id, session["user_id"]))
     return jsonify({"success": True, "avatar_pokemon_id": pokemon_id})
 
-
 def _sync_set_core(conn, set_id: str):
     raw_cards = pokemon_api.fetch_cards_for_set(set_id)
     now = datetime.datetime.utcnow().isoformat()
     for raw in raw_cards:
         db.upsert_card(conn, pokemon_api.normalize_card(raw, set_id))
     db.mark_set_synced(conn, set_id, now)
-
 
 def _preload_all_sets_worker():
     global _preload_running
@@ -269,7 +298,6 @@ def _preload_all_sets_worker():
             _preload_running = False
     print("[Background Sync] Preload completed successfully!")
 
-
 def start_background_preload():
     global _preload_running
     with _preload_lock:
@@ -278,11 +306,9 @@ def start_background_preload():
         _preload_running = True
     threading.Thread(target=_preload_all_sets_worker, daemon=True).start()
 
-
 _force_resync_lock = threading.Lock()
 _force_resync_running = False
 _force_resync_status = {"running": False, "total": 0, "done": 0, "current_set": None}
-
 
 def _force_resync_all_worker():
     global _force_resync_running
@@ -314,7 +340,6 @@ def _force_resync_all_worker():
         _force_resync_status["current_set"] = None
     print("[Admin Resync] Completato!")
 
-
 def start_force_resync_all() -> bool:
     global _force_resync_running
     with _force_resync_lock:
@@ -325,7 +350,6 @@ def start_force_resync_all() -> bool:
     threading.Thread(target=_force_resync_all_worker, daemon=True).start()
     return True
 
-
 @app.route("/api/admin/resync-all", methods=["POST"])
 @admin_required
 def api_admin_resync_all():
@@ -333,19 +357,16 @@ def api_admin_resync_all():
         return jsonify({"error": "A resync is already in progress"}), 409
     return jsonify({"success": True})
 
-
 @app.route("/api/admin/resync-status")
 @admin_required
 def api_admin_resync_status():
     return jsonify(_force_resync_status)
-
 
 REFRESH_INTERVAL_DAYS = 7
 _REFRESH_CHECK_INTERVAL_SECONDS = 6 * 60 * 60
 
 _weekly_refresh_lock = threading.Lock()
 _weekly_refresh_started = False
-
 
 def _weekly_refresh_worker():
     while True:
@@ -372,7 +393,6 @@ def _weekly_refresh_worker():
 
         time.sleep(_REFRESH_CHECK_INTERVAL_SECONDS)
 
-
 def start_weekly_refresh():
     global _weekly_refresh_started
     with _weekly_refresh_lock:
@@ -381,36 +401,29 @@ def start_weekly_refresh():
         _weekly_refresh_started = True
     threading.Thread(target=_weekly_refresh_worker, daemon=True).start()
 
-
 @app.route("/")
 def serve_index():
     return send_from_directory(FRONTEND_DIR, "index.html")
-
 
 @app.route("/login.html")
 def serve_login_page():
     return send_from_directory(FRONTEND_DIR, "login.html")
 
-
 @app.route("/set.html")
 def serve_set_page():
     return send_from_directory(FRONTEND_DIR, "set.html")
-
 
 @app.route("/collezione.html")
 def serve_collection_page():
     return send_from_directory(FRONTEND_DIR, "collezione.html")
 
-
 @app.route("/wishlist.html")
 def serve_wishlist_page():
     return send_from_directory(FRONTEND_DIR, "wishlist.html")
 
-
 @app.route("/binder.html")
 def serve_binder_page():
     return send_from_directory(FRONTEND_DIR, "binder.html")
-
 
 @app.route("/api/sets")
 @login_required
@@ -436,12 +449,16 @@ def api_list_sets():
         start_background_preload()
         return jsonify([dict(r) for r in rows])
 
-
 @app.route("/api/sets/refresh", methods=["POST"])
 @login_required
 def api_refresh_sets():
+    rl_key = f"sync_api_{_rate_limit_key()}"
+    if _is_rate_limited(rl_key, max_attempts=3, window=60): # Max 3 tentativi di sync al minuto
+        return jsonify({"error": "Too many refresh attempts. Please wait."}), 429
+
     try:
         raw_sets = pokemon_api.fetch_sets()
+        _record_attempt(rl_key)
     except pokemon_api.PokemonAPIError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
@@ -453,7 +470,6 @@ def api_refresh_sets():
         rows = db.get_all_sets(conn, session["user_id"])
         start_background_preload()
         return jsonify([dict(r) for r in rows])
-
 
 @app.route("/api/sets/<set_id>/cards")
 @login_required
@@ -479,13 +495,17 @@ def api_get_set_cards(set_id):
             "available_rarities": rarities,
         })
 
-
 @app.route("/api/sets/<set_id>/refresh", methods=["POST"])
 @login_required
 def api_refresh_set_cards(set_id):
+    rl_key = f"sync_set_{set_id}_{_rate_limit_key()}"
+    if _is_rate_limited(rl_key, max_attempts=2, window=60):
+        return jsonify({"error": "Too many refresh attempts for this set. Please wait."}), 429
+
     user_id = session["user_id"]
     with db.get_conn() as conn:
         result = _sync_set(conn, set_id)
+        _record_attempt(rl_key)
         if isinstance(result, tuple):
             return result
         cards = db.get_cards_for_set(conn, set_id, None, user_id)
@@ -497,7 +517,6 @@ def api_refresh_set_cards(set_id):
             "available_rarities": rarities,
         })
 
-
 def _sync_set(conn, set_id: str):
     try:
         _sync_set_core(conn, set_id)
@@ -506,7 +525,6 @@ def _sync_set(conn, set_id: str):
     except Exception as e:
         return jsonify({"error": f"Error contacting the API: {e}"}), 502
     return None
-
 
 @app.route("/api/cards/search")
 @login_required
@@ -561,7 +579,6 @@ def api_search_cards():
 
     return jsonify([dict(c) for c in cards])
 
-
 @app.route("/api/rarities")
 @login_required
 def api_global_rarities():
@@ -570,7 +587,6 @@ def api_global_rarities():
         rarities = db.get_all_global_rarities(conn, name)
         return jsonify(rarities)
 
-
 @app.route("/api/types")
 @login_required
 def api_global_types():
@@ -578,14 +594,12 @@ def api_global_types():
         types = db.get_all_global_types(conn)
         return jsonify(types)
 
-
 @app.route("/api/collection")
 @login_required
 def api_get_collection():
     with db.get_conn() as conn:
         rows = db.get_user_collection(conn, session["user_id"])
         return jsonify([dict(r) for r in rows])
-
 
 @app.route("/api/collection/toggle", methods=["POST"])
 @login_required
@@ -598,14 +612,12 @@ def api_toggle_collection():
         is_owned = db.toggle_card_ownership(conn, session["user_id"], card_id)
         return jsonify({"is_owned": is_owned})
 
-
 @app.route("/api/wishlist")
 @login_required
 def api_get_wishlist():
     with db.get_conn() as conn:
         rows = db.get_user_wishlist(conn, session["user_id"])
         return jsonify([dict(r) for r in rows])
-
 
 @app.route("/api/wishlist/toggle", methods=["POST"])
 @login_required
@@ -624,7 +636,6 @@ def api_wishlist_uncategorized():
     with db.get_conn() as conn:
         rows = db.get_uncategorized_wishlist(conn, session["user_id"])
         return jsonify([dict(r) for r in rows])
-
 
 @app.route("/api/wishlist/boards", methods=["GET", "POST"])
 @login_required
@@ -645,8 +656,6 @@ def api_wishlist_boards():
         rows = db.get_wishlist_boards(conn, user_id)
         return jsonify([dict(r) for r in rows])
 
-
-# MODIFICA: Nuova rotta POST asincrona per salvare la sequenza di ordinamento delle bacheche
 @app.route("/api/wishlist/boards/reorder", methods=["POST"])
 @login_required
 def api_reorder_wishlist_boards():
@@ -658,8 +667,6 @@ def api_reorder_wishlist_boards():
         db.reorder_wishlist_boards(conn, session["user_id"], board_ids)
     return jsonify({"success": True})
 
-
-# MODIFICA: Nuova rotta POST asincrona per salvare la sequenza di ordinamento delle carte dentro la singola bacheca
 @app.route("/api/wishlist/boards/<int:board_id>/cards/reorder", methods=["POST"])
 @login_required
 def api_reorder_board_cards(board_id):
@@ -674,7 +681,6 @@ def api_reorder_board_cards(board_id):
             return jsonify({"error": "Board not found"}), 404
         db.reorder_board_cards(conn, board_id, card_ids)
     return jsonify({"success": True})
-
 
 @app.route("/api/wishlist/boards/<int:board_id>", methods=["GET", "PATCH", "DELETE"])
 @login_required
@@ -706,7 +712,6 @@ def api_wishlist_board_single(board_id):
         cards = db.get_wishlist_board_cards(conn, board_id)
         return jsonify({"board": dict(board), "cards": [dict(c) for c in cards]})
 
-
 @app.route("/api/wishlist/boards/<int:board_id>/cards", methods=["POST"])
 @login_required
 def api_wishlist_board_add_card(board_id):
@@ -727,7 +732,6 @@ def api_wishlist_board_add_card(board_id):
         db.add_card_to_board(conn, board_id, card_id)
         return jsonify({"success": True})
 
-
 @app.route("/api/wishlist/boards/<int:board_id>/cards/<card_id>", methods=["DELETE"])
 @login_required
 def api_wishlist_board_remove_card(board_id, card_id):
@@ -738,7 +742,6 @@ def api_wishlist_board_remove_card(board_id, card_id):
             return jsonify({"error": "Board not found"}), 404
         db.remove_card_from_board(conn, board_id, card_id)
         return jsonify({"success": True})
-
 
 @app.route("/api/sets/toggle-favorite", methods=["POST"])
 @login_required
@@ -751,7 +754,6 @@ def api_toggle_set_favorite():
         is_favorite = db.toggle_set_favorite(conn, session["user_id"], set_id)
         return jsonify({"is_favorite": is_favorite})
 
-
 @app.route("/api/sets/favorites/reorder", methods=["POST"])
 @login_required
 def api_reorder_favorite_sets():
@@ -762,7 +764,6 @@ def api_reorder_favorite_sets():
     with db.get_conn() as conn:
         db.reorder_favorite_sets(conn, session["user_id"], set_ids)
     return jsonify({"success": True})
-
 
 @app.route("/api/binders", methods=["GET", "POST"])
 @login_required
@@ -796,7 +797,6 @@ def api_manage_binders():
     with db.get_conn() as conn:
         rows = db.get_all_binders(conn, user_id)
         return jsonify([dict(r) for r in rows])
-
 
 @app.route("/api/binders/<int:binder_id>", methods=["GET", "POST", "PATCH", "DELETE"])
 @login_required
@@ -840,7 +840,6 @@ def api_single_binder(binder_id):
         slots = db.get_binder_slots(conn, binder_id)
         return jsonify({"binder": dict(b), "slots": {s["slot_number"]: dict(s) for s in slots}})
 
-
 @app.route("/api/binders/<int:binder_id>/slots", methods=["GET", "POST"])
 @login_required
 def api_assign_slot(binder_id):
@@ -876,8 +875,6 @@ def api_assign_slot(binder_id):
         db.set_binder_slot(conn, binder_id, slot_number, card_id if card_id else None, custom_image_url, slot_span)
         return jsonify({"success": True})
 
-
 if __name__ == "__main__":
-    db.init_db()
     start_weekly_refresh()
-    app.run(host=HOST, port=PORT, debug=DEBUG)  
+    app.run(host=HOST, port=PORT, debug=DEBUG)

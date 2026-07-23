@@ -56,3 +56,7 @@ def _get_or_create_secret_key() -> str:
 USD_TO_EUR_RATE = float(os.environ.get("USD_TO_EUR_RATE", "0.92"))
 
 SECRET_KEY = _get_or_create_secret_key()
+
+# --- SECURITY SETTINGS ---
+# Limita la dimensione massima della richiesta (es. upload di file) a 5 MB
+MAX_CONTENT_LENGTH = 5 * 1024 * 1024

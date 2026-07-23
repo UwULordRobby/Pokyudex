@@ -48,6 +48,11 @@
           <a href="binder.html" class="side-menu-link">📁 Binders</a>
           <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
           <a href="collezione.html" class="side-menu-link">★ My Collection</a>
+          <!-- VOCI MENU SOLO MOBILE -->
+          <div class="mobile-only-menu-items">
+            <a href="#" class="side-menu-link" onclick="if(typeof showAboutModal === 'function') showAboutModal()">👤 About</a>
+            <a href="#" class="side-menu-link" style="color: var(--danger);" onclick="logoutUser()">🚪 Logout</a>
+          </div>
         </div>
       </div>
       <a href="index.html" class="icon-btn" aria-label="Home" title="Home">🏠</a>
@@ -84,18 +89,19 @@
     </div>
 
     <div id="section-cards" style="display: none;">
-      <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 10px;">
-        <input type="text" class="search-bar" id="card-name-input" placeholder="Card name (e.g. Charizard)..." style="margin-top: 0; flex: 1; min-width: 220px;" />
+      <!-- FIX MOBILE: Rimossi i min-width statici e aggiunta classe mobile-search-row -->
+      <div class="mobile-search-row" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 10px;">
+        <input type="text" class="search-bar" id="card-name-input" placeholder="Card name (e.g. Charizard)..." style="margin-top: 0; flex: 1;" />
         
-        <select id="card-rarity-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 220px; height: 41px; padding: 0 14px;">
+        <select id="card-rarity-select" class="search-bar" style="margin-top: 0; height: 41px; padding: 0 14px;">
           <option value="">-- Any Rarity --</option>
         </select>
 
-        <select id="card-type-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 180px; height: 41px; padding: 0 14px;">
+        <select id="card-type-select" class="search-bar" style="margin-top: 0; height: 41px; padding: 0 14px;">
           <option value="">-- Any Type --</option>
         </select>
 
-        <select id="sort-cards-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 200px; height: 41px; padding: 0 14px;">
+        <select id="sort-cards-select" class="search-bar" style="margin-top: 0; height: 41px; padding: 0 14px;">
           <option value="price_desc">Price: highest first</option>
           <option value="price_asc">Price: lowest first</option>
           <option value="rarity_desc">Rarity: rarest first</option>

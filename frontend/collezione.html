@@ -22,6 +22,11 @@
           <a href="binder.html" class="side-menu-link">📁 Binders</a>
           <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
           <a href="collezione.html" class="side-menu-link">★ My Collection</a>
+          <!-- VOCI MENU SOLO MOBILE -->
+          <div class="mobile-only-menu-items">
+            <a href="#" class="side-menu-link" onclick="if(typeof showAboutModal === 'function') showAboutModal()">👤 About</a>
+            <a href="#" class="side-menu-link" style="color: var(--danger);" onclick="logoutUser()">🚪 Logout</a>
+          </div>
         </div>
       </div>
       <a href="index.html" class="icon-btn" aria-label="Home" title="Home">🏠</a>

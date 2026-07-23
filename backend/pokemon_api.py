@@ -2,6 +2,7 @@
 Minimal wrapper for the Pokémon TCG API (api.pokemontcg.io/v2).
 Docs: https://docs.pokemontcg.io/
 """
+import time
 import requests
 
 from config import API_BASE_URL, API_KEY
@@ -31,17 +32,42 @@ def fetch_sets() -> list[dict]:
 
 
 def fetch_cards_for_set(set_id: str) -> list[dict]:
-    """Retrieves ALL cards for a set with automatic pagination."""
+    """Retrieves ALL cards for a set with automatic pagination and retry logic."""
     all_cards = []
     page = 1
-    page_size = 250
+    page_size = 100  # Ridotto a 100 per alleggerire il carico sul server API ed evitare errori 500
+    max_retries = 3  # Numero massimo di tentativi in caso di errore 500 o problemi di rete
+
     while True:
         params = {"q": f"set.id:{set_id}", "page": page, "pageSize": page_size}
-        resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=60)
-        if resp.status_code == 429:
-            raise PokemonAPIError("Rate limit reached.")
-        resp.raise_for_status()
-        payload = resp.json()
+        
+        success = False
+        payload = {}
+        for attempt in range(max_retries):
+            try:
+                resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=60)
+                
+                if resp.status_code == 429:
+                    raise PokemonAPIError("Rate limit reached.")
+                
+                # Se l'API restituisce un errore 500 o superiore, attendiamo e riproviamo
+                if resp.status_code >= 500:
+                    print(f"[API] Server Error {resp.status_code} for set {set_id}. Retrying {attempt + 1}/{max_retries}...")
+                    time.sleep(2 ** attempt)  # Backoff esponenziale (1s, 2s, 4s)
+                    continue
+                
+                resp.raise_for_status()
+                payload = resp.json()
+                success = True
+                break
+                
+            except requests.exceptions.RequestException as e:
+                print(f"[API] Network error for set {set_id}: {e}. Retrying {attempt + 1}/{max_retries}...")
+                time.sleep(2 ** attempt)
+
+        if not success:
+            raise PokemonAPIError(f"The Pokémon TCG API is currently unavailable or returning errors for set {set_id}.")
+
         batch = payload.get("data", [])
         all_cards.extend(batch)
 
@@ -53,7 +79,7 @@ def fetch_cards_for_set(set_id: str) -> list[dict]:
     return all_cards
 
 
-# ---------- NEW METHODS: Emergency Live Search ----------
+# ---------- Emergency Live Search ----------
 
 def fetch_cards_by_pokedex(pokedex_number: int) -> list[dict]:
     """Searches directly on the Pokémon TCG server for all cards matching a Pokédex ID."""

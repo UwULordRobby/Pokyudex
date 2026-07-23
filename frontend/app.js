@@ -127,7 +127,7 @@ function showAboutModal() {
     modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
     modal.innerHTML = `
       <div class="about-card">
-        <button class="modal-close" style="position:absolute; top:-14px; right:-14px; width:32px; height:32px; border-radius:50%; background:var(--panel); border:1px solid var(--border); font-size:18px;" onclick="document.getElementById('about-modal').style.display='none'">&times;</button>
+        <button class="modal-close" onclick="document.getElementById('about-modal').style.display='none'">&times;</button>
         <div class="auth-brand" style="justify-content:flex-start; margin-bottom:14px;"><span class="dot"></span> Pokyudex</div>
         <p style="color:var(--text-muted); font-size:14px; margin:0 0 18px;">Built with love for the Pokémon TCG community.</p>
         <div style="display:flex; flex-direction:column; gap:10px; font-family:'JetBrains Mono', monospace; font-size:13px;">
@@ -189,7 +189,7 @@ function showAvatarPickerModal() {
     `).join('');
     modal.innerHTML = `
       <div class="about-card" style="max-width:560px; max-height:80vh; overflow-y:auto;" onclick="event.stopPropagation()">
-        <button class="modal-close" style="position:absolute; top:-14px; right:-14px; width:32px; height:32px; border-radius:50%; background:var(--panel); border:1px solid var(--border); font-size:18px;" onclick="document.getElementById('avatar-modal').style.display='none'">&times;</button>
+        <button class="modal-close" onclick="document.getElementById('avatar-modal').style.display='none'">&times;</button>
         <div class="auth-brand" style="justify-content:flex-start; margin-bottom:14px;"><span class="dot"></span> Choose Your Profile Avatar</div>
         <div class="avatar-grid">${grid}</div>
       </div>
@@ -273,6 +273,7 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
       <div class="color-picker-wheel-zone">
         <div class="color-wheel">
           <div class="color-wheel-saturation"></div>
+          <div class="color-wheel-lightness"></div>
           <div class="color-wheel-marker"></div>
         </div>
       </div>
@@ -315,6 +316,7 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     dropdown.classList.toggle('active');
     if (dropdown.classList.contains('active')) {
       updateMarkerPosition(hsl.h, hsl.s);
+      updateColor(); // Forza l'aggiornamento grafico del velo di luminosità
       renderSavedColors();
     }
   });
@@ -389,6 +391,18 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   function updateColor() {
     hsl.l = parseInt(lightSlider.value);
     lValSpan.textContent = hsl.l + '%';
+    
+    // Aggiorna l'overlay trasparente di luminosità (non il colore puro sotto)
+    let overlayColor = 'transparent';
+    if (hsl.l < 50) {
+      let opacity = (50 - hsl.l) / 50;
+      overlayColor = `rgba(0, 0, 0, ${opacity})`;
+    } else if (hsl.l > 50) {
+      let opacity = (hsl.l - 50) / 50;
+      overlayColor = `rgba(255, 255, 255, ${opacity})`;
+    }
+    wheel.style.setProperty('--cp-overlay', overlayColor);
+    
     const hex = hslToHex(hsl.h, hsl.s, hsl.l);
     input.value = hex;
     swatchBtn.style.backgroundColor = hex;
@@ -453,6 +467,17 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
       hsl = hexToHsl(hex);
       lightSlider.value = hsl.l;
       lValSpan.textContent = hsl.l + '%';
+      
+      let overlayColor = 'transparent';
+      if (hsl.l < 50) {
+        let opacity = (50 - hsl.l) / 50;
+        overlayColor = `rgba(0, 0, 0, ${opacity})`;
+      } else if (hsl.l > 50) {
+        let opacity = (hsl.l - 50) / 50;
+        overlayColor = `rgba(255, 255, 255, ${opacity})`;
+      }
+      wheel.style.setProperty('--cp-overlay', overlayColor);
+      
       updateMarkerPosition(hsl.h, hsl.s);
       
       if (livePreviewInput) {

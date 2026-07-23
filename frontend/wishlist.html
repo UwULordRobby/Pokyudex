@@ -25,19 +25,24 @@
           <a href="binder.html" class="side-menu-link">📁 Binders</a>
           <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
           <a href="collezione.html" class="side-menu-link">★ My Collection</a>
+          <!-- VOCI MENU SOLO MOBILE -->
+          <div class="mobile-only-menu-items">
+            <a href="#" class="side-menu-link" onclick="if(typeof showAboutModal === 'function') showAboutModal()">👤 About</a>
+            <a href="#" class="side-menu-link" style="color: var(--danger);" onclick="logoutUser()">🚪 Logout</a>
+          </div>
         </div>
       </div>
       <a href="index.html" class="icon-btn" aria-label="Home" title="Home">🏠</a>
       <a href="index.html" class="brand"><span class="dot"></span> Pokyudex</a>
     </div>
     <div class="topbar-right">
+      <button class="btn" id="about-btn" title="About the creator">👤 About</button>
       <span id="current-username" class="user-badge"></span>
       <button class="btn" onclick="logoutUser()">Logout</button>
     </div>
   </div>
 
   <div class="container">
-    <div class="eyebrow" id="stats-header-eyebrow">Your Budget</div>
     <h1 id="stats-header-title">Wishlist</h1>
 
     <div class="stats-panel">
@@ -89,7 +94,7 @@
     </div>
 
     <div id="main-wishlist-section">
-      <div class="section-title" style="margin-top: 10px;">Uncategorized Items</div>
+      <div class="section-title" style="margin-top: 10px;">Items</div>
       <div class="controls-row">
         <select id="sort-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 240px; height: 41px; padding: 0 14px;">
           <option value="price_desc">Price: highest first</option>
@@ -490,7 +495,6 @@
       
       const bObj = boards.find(x => x.id === boardId);
       if(bObj) {
-        document.getElementById('stats-header-eyebrow').textContent = "Board Budget";
         document.getElementById('stats-header-title').textContent = bObj.name;
       }
       
@@ -508,7 +512,6 @@
       currentBoardId = null;
       closeAddToBoardOverlay(); 
       
-      document.getElementById('stats-header-eyebrow').textContent = "Your Budget";
       document.getElementById('stats-header-title').textContent = "Wishlist";
       calculateStats(wishlist); 
       

@@ -3,12 +3,12 @@ from contextlib import contextmanager
 
 from config import DB_PATH
 
-# MULTI-USER SCHEMA NOTE[cite: 3]:
-# - "sets" and "cards" remain global tables (shared product catalog)[cite: 3].
-# - "collection", "wishlist" and "favorite_sets" now have a composite[cite: 3]
-#   primary key (user_id, ...) so each user can own/want the same card[cite: 3]
-#   independently of other users[cite: 3].
-# - "binders" has a user_id column to know who owns each binder[cite: 3].
+# MULTI-USER SCHEMA NOTE:
+# - "sets" and "cards" remain global tables (shared product catalog).
+# - "collection", "wishlist" and "favorite_sets" now have a composite
+#   primary key (user_id, ...) so each user can own/want the same card
+#   independently of other users.
+# - "binders" has a user_id column to know who owns each binder.
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sets (
     id TEXT PRIMARY KEY,
@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT NOT NULL UNIQUE,
     username TEXT UNIQUE,
     password_hash TEXT NOT NULL,
+    is_admin INTEGER DEFAULT 0,
     created_at TEXT NOT NULL
 );
 
@@ -219,6 +220,13 @@ def init_db():
         
         if not _column_exists(conn, "users", "avatar_pokemon_id"):
             conn.execute("ALTER TABLE users ADD COLUMN avatar_pokemon_id INTEGER")
+            
+        # Security: Migrazione ruolo Admin (Issue 7)
+        if not _column_exists(conn, "users", "is_admin"):
+            conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+            # Imposta automaticamente l'utente con ID 1 come admin per retrocompatibilità
+            conn.execute("UPDATE users SET is_admin = 1 WHERE id = 1")
+            print("[Database] 'is_admin' column added to users. User ID 1 granted admin rights.")
 
         check = conn.execute("SELECT COUNT(*) AS c FROM cards WHERE national_dex IS NOT NULL").fetchone()
         if check and check["c"] == 0:
@@ -230,12 +238,12 @@ def init_db():
 
 # ---------- Users ----------
 
-def create_user(conn, email: str, username: str, password_hash: str):
+def create_user(conn, email: str, username: str, password_hash: str, is_admin: int = 0):
     import datetime
     now = datetime.datetime.utcnow().isoformat()
     cursor = conn.execute(
-        "INSERT INTO users (email, username, password_hash, created_at) VALUES (?, ?, ?, ?)",
-        (email.strip().lower(), username.strip(), password_hash, now),
+        "INSERT INTO users (email, username, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?, ?)",
+        (email.strip().lower(), username.strip(), password_hash, is_admin, now),
     )
     return cursor.lastrowid
 
@@ -569,9 +577,7 @@ def set_binder_slot(conn, binder_id: int, slot_number: int, card_id: str | None,
             (binder_id, slot_number, card_id if card_id else None, custom_image_url if custom_image_url else None, slot_span)
         )
 
-# ---------- Custom Wishlist Boards ----------
 
-# CORRECTIVE EDIT[cite: 3]: Removed the NOT EXISTS filter to ensure it shows ALL cards added to the wishlist, allowing duplication across multiple boards[cite: 3]
 def get_uncategorized_wishlist(conn, user_id: int):
     return conn.execute(
         """SELECT cards.*, sets.name AS set_name, sets.release_date

@@ -15,6 +15,11 @@
           <a href="binder.html" class="side-menu-link">📁 Binders</a>
           <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
           <a href="collezione.html" class="side-menu-link">★ My Collection</a>
+          <!-- VOCI MENU SOLO MOBILE -->
+          <div class="mobile-only-menu-items">
+            <a href="#" class="side-menu-link" onclick="if(typeof showAboutModal === 'function') showAboutModal()">👤 About</a>
+            <a href="#" class="side-menu-link" style="color: var(--danger);" onclick="logoutUser()">🚪 Logout</a>
+          </div>
         </div>
       </div>
       <a href="index.html" class="icon-btn" aria-label="Home" title="Home">🏠</a>
@@ -34,12 +39,13 @@
         <h1 id="set-name">Loading...</h1>
       </div>
       
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap; justify-content: flex-end;">
-        <input type="text" id="name-search" class="search-bar" placeholder="Search Pokémon..." style="margin-top: 0; width: auto; min-width: 200px; height: 41px; padding: 0 14px;" />
-        <select id="type-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 160px; height: 41px; padding: 0 14px;">
+      <!-- FIX MOBILE: Rimossi i min-width statici e aggiunta classe mobile-search-row -->
+      <div class="mobile-search-row" style="display:flex; gap:10px; align-items:center; flex-wrap: wrap; justify-content: flex-end;">
+        <input type="text" id="name-search" class="search-bar" placeholder="Search Pokémon..." style="margin-top: 0; height: 41px; padding: 0 14px;" />
+        <select id="type-select" class="search-bar" style="margin-top: 0; height: 41px; padding: 0 14px;">
           <option value="">-- Any Type --</option>
         </select>
-        <select id="sort-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 220px; height: 41px; padding: 0 14px;">
+        <select id="sort-select" class="search-bar" style="margin-top: 0; height: 41px; padding: 0 14px;">
           <option value="price_desc">Price: highest first</option>
           <option value="price_asc">Price: lowest first</option>
           <option value="rarity_desc">Rarity: rarest first</option>
@@ -203,11 +209,43 @@
       const el = document.getElementById('filters');
       el.innerHTML = '';
       
+      const desktopDiv = document.createElement('div');
+      desktopDiv.className = 'desktop-rarity-chips';
+
+      const mobileSelect = document.createElement('select');
+      mobileSelect.className = 'search-bar mobile-rarity-select';
+      mobileSelect.style.marginTop = '0';
+      mobileSelect.style.marginBottom = '14px';
+
+      const optAll = document.createElement('option');
+      optAll.value = "ALL";
+      optAll.textContent = "All Rarities";
+      mobileSelect.appendChild(optAll);
+
+      rarities.forEach((r) => {
+        const opt = document.createElement('option');
+        opt.value = r;
+        opt.textContent = r;
+        if (activeRarities.has(r)) opt.selected = true;
+        mobileSelect.appendChild(opt);
+      });
+
+      mobileSelect.addEventListener('change', (e) => {
+        activeRarities.clear();
+        if (e.target.value !== "ALL") {
+          activeRarities.add(e.target.value);
+        }
+        renderFilters(rarities);
+        renderCards();
+      });
+
+      el.appendChild(mobileSelect);
+
       const allChip = document.createElement('div');
       allChip.className = 'chip' + (activeRarities.size === 0 ? ' active' : '');
       allChip.textContent = 'All';
       allChip.onclick = () => { activeRarities.clear(); renderFilters(rarities); renderCards(); };
-      el.appendChild(allChip);
+      desktopDiv.appendChild(allChip);
 
       rarities.forEach((r) => {
         const chip = document.createElement('div');
@@ -218,7 +256,7 @@
             else activeRarities.add(r);
             renderFilters(rarities); renderCards(); 
         };
-        el.appendChild(chip);
+        desktopDiv.appendChild(chip);
       });
       
       if(activeRarities.size > 0) {
@@ -228,8 +266,10 @@
           deselectBtn.style.color = 'var(--danger)';
           deselectBtn.textContent = '✕ Deselect All';
           deselectBtn.onclick = () => { activeRarities.clear(); renderFilters(rarities); renderCards(); };
-          el.appendChild(deselectBtn);
+          desktopDiv.appendChild(deselectBtn);
       }
+      
+      el.appendChild(desktopDiv);
     }
 
     function sortCards(cardsArray, criteria) {
