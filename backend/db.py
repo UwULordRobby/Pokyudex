@@ -221,10 +221,8 @@ def init_db():
         if not _column_exists(conn, "users", "avatar_pokemon_id"):
             conn.execute("ALTER TABLE users ADD COLUMN avatar_pokemon_id INTEGER")
             
-        # Security: Migrazione ruolo Admin (Issue 7)
         if not _column_exists(conn, "users", "is_admin"):
             conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
-            # Imposta automaticamente l'utente con ID 1 come admin per retrocompatibilità
             conn.execute("UPDATE users SET is_admin = 1 WHERE id = 1")
             print("[Database] 'is_admin' column added to users. User ID 1 granted admin rights.")
 
@@ -311,17 +309,17 @@ def upsert_card(conn, card_data: dict):
         ON CONFLICT(id) DO UPDATE SET
             name=excluded.name,
             card_number=excluded.card_number,
-            rarity=excluded.rarity,
-            image_small=excluded.image_small,
-            image_large=excluded.image_large,
-            price_market=excluded.price_market,
-            price_low=excluded.price_low,
-            price_mid=excluded.price_mid,
-            price_high=excluded.price_high,
-            currency=excluded.currency,
-            last_updated=excluded.last_updated,
-            national_dex=excluded.national_dex,
-            types=excluded.types
+            rarity=COALESCE(excluded.rarity, cards.rarity),
+            image_small=COALESCE(excluded.image_small, cards.image_small),
+            image_large=COALESCE(excluded.image_large, cards.image_large),
+            price_market=COALESCE(excluded.price_market, cards.price_market),
+            price_low=COALESCE(excluded.price_low, cards.price_low),
+            price_mid=COALESCE(excluded.price_mid, cards.price_mid),
+            price_high=COALESCE(excluded.price_high, cards.price_high),
+            currency=COALESCE(excluded.currency, cards.currency),
+            last_updated=COALESCE(excluded.last_updated, cards.last_updated),
+            national_dex=COALESCE(excluded.national_dex, cards.national_dex),
+            types=COALESCE(excluded.types, cards.types)
         """,
         card_data,
     )

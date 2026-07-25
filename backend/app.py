@@ -52,11 +52,10 @@ def add_security_headers(response):
     if not DEBUG:
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     
-    # Content Security Policy adattata per i domini esterni usati
-    # Content Security Policy adattata per i domini esterni usati
+    # Content Security Policy adattata per i domini esterni usati e blob per l'upload
     csp = (
         "default-src 'self'; "
-        "img-src 'self' data: https: http:; " 
+        "img-src 'self' data: blob: https: http:; " 
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "script-src 'self' 'unsafe-inline';"
@@ -99,7 +98,6 @@ def api_exchange_rate():
 
 def _is_admin(user_id) -> bool:
     # Verifica il flag sul database invece di un ID fisso. 
-    # Usiamo user["is_admin"] perché sqlite3.Row non ha il metodo .get()
     with db.get_conn() as conn:
         user = db.get_user_by_id(conn, user_id)
         return bool(user and user["is_admin"])
@@ -453,7 +451,7 @@ def api_list_sets():
 @login_required
 def api_refresh_sets():
     rl_key = f"sync_api_{_rate_limit_key()}"
-    if _is_rate_limited(rl_key, max_attempts=3, window=60): # Max 3 tentativi di sync al minuto
+    if _is_rate_limited(rl_key, max_attempts=3, window=60):
         return jsonify({"error": "Too many refresh attempts. Please wait."}), 429
 
     try:
@@ -807,7 +805,26 @@ def api_single_binder(binder_id):
 
     with db.get_conn() as conn:
         if request.method == "DELETE":
+            b = db.get_binder(conn, binder_id, user_id)
+            if not b:
+                return jsonify({"error": "Binder not found"}), 404
+            
+            # Trova le immagini custom da eliminare prima di droppare il binder
+            slots = db.get_binder_slots(conn, binder_id)
+            custom_images = [s["custom_image_url"] for s in slots if s["custom_image_url"]]
+            
             db.delete_binder(conn, binder_id, user_id)
+            
+            # Elimina fisicamente i file
+            for img_url in custom_images:
+                try:
+                    filename = img_url.split("/")[-1]
+                    filepath = FRONTEND_DIR / "uploads" / filename
+                    if filepath.exists():
+                        filepath.unlink()
+                except:
+                    pass
+            
             return jsonify({"success": True})
 
         if request.method == "PATCH":
@@ -872,7 +889,27 @@ def api_assign_slot(binder_id):
         max_slot = 1025 if binder["type"] == "pokedex" else binder["rows"] * binder["cols"] * 200
         if slot_number > max_slot:
             return jsonify({"error": "Slot number is outside the binder's limits"}), 400
+            
+        # Identifica se c'era una vecchia immagine custom da eliminare
+        slots = db.get_binder_slots(conn, binder_id)
+        old_image_url = None
+        for s in slots:
+            if s["slot_number"] == slot_number:
+                old_image_url = s["custom_image_url"]
+                break
+
         db.set_binder_slot(conn, binder_id, slot_number, card_id if card_id else None, custom_image_url, slot_span)
+        
+        # Se l'immagine è cambiata o lo slot è stato svuotato, elimina il vecchio file
+        if old_image_url and old_image_url != custom_image_url:
+            try:
+                filename = old_image_url.split("/")[-1]
+                filepath = FRONTEND_DIR / "uploads" / filename
+                if filepath.exists():
+                    filepath.unlink()
+            except:
+                pass
+                
         return jsonify({"success": True})
 
 if __name__ == "__main__":

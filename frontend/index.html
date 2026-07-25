@@ -68,7 +68,7 @@
 
   <div class="container">
     <div class="eyebrow">Pokyudex &mdash; Search Panel</div>
-    <h1>What would you like to search for today?</h1>
+    <h1>What would you larghe you like to search for today?</h1>
     
     <div class="filters" style="position: static; background: none; backdrop-filter: none; border-bottom: none; padding: 10px 0 20px;">
       <div class="chip active" id="tab-sets-btn">Browse Sets</div>
@@ -89,19 +89,19 @@
     </div>
 
     <div id="section-cards" style="display: none;">
-      <!-- FIX MOBILE: Rimossi i min-width statici e aggiunta classe mobile-search-row -->
+      <!-- Ripristinate le larghezze fisse inline per Desktop -->
       <div class="mobile-search-row" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 10px;">
-        <input type="text" class="search-bar" id="card-name-input" placeholder="Card name (e.g. Charizard)..." style="margin-top: 0; flex: 1;" />
+        <input type="text" class="search-bar" id="card-name-input" placeholder="Card name (e.g. Charizard)..." style="margin-top: 0; flex: 1; min-width: 220px;" />
         
-        <select id="card-rarity-select" class="search-bar" style="margin-top: 0; height: 41px; padding: 0 14px;">
+        <select id="card-rarity-select" class="search-bar" style="margin-top: 0; height: 41px; padding: 0 14px; width: auto; min-width: 220px;">
           <option value="">-- Any Rarity --</option>
         </select>
 
-        <select id="card-type-select" class="search-bar" style="margin-top: 0; height: 41px; padding: 0 14px;">
+        <select id="card-type-select" class="search-bar" style="margin-top: 0; height: 41px; padding: 0 14px; width: auto; min-width: 180px;">
           <option value="">-- Any Type --</option>
         </select>
 
-        <select id="sort-cards-select" class="search-bar" style="margin-top: 0; height: 41px; padding: 0 14px;">
+        <select id="sort-cards-select" class="search-bar" style="margin-top: 0; height: 41px; padding: 0 14px; width: auto; min-width: 200px;">
           <option value="price_desc">Price: highest first</option>
           <option value="price_asc">Price: lowest first</option>
           <option value="rarity_desc">Rarity: rarest first</option>

@@ -1,5 +1,5 @@
 """
-Minimal wrapper for the Pokémon TCG API (api.pokemontcg.io/v2).
+Minimal wrapper for the Pokémon TCG API (api.pokemontcg.io/v2) with TCGdex fallback.
 Docs: https://docs.pokemontcg.io/
 """
 import time
@@ -20,29 +20,55 @@ def _headers():
 
 
 def fetch_sets() -> list[dict]:
-    """Retrieves the list of all available expansions."""
-    resp = requests.get(f"{API_BASE_URL}/sets", headers=_headers(), timeout=30)
-    if resp.status_code == 429:
-        raise PokemonAPIError(
-            "Rate limit reached. If you do not have a free API key yet, "
-            "register at https://dev.pokemontcg.io for higher limits."
-        )
-    resp.raise_for_status()
-    return resp.json().get("data", [])
+    """Retrieves the list of all available expansions, with fallback to TCGdex."""
+    try:
+        resp = requests.get(f"{API_BASE_URL}/sets", headers=_headers(), timeout=30)
+        if resp.status_code == 429:
+            raise PokemonAPIError("Rate limit reached. If you do not have a free API key yet, register at https://dev.pokemontcg.io.")
+        resp.raise_for_status()
+        return resp.json().get("data", [])
+    except Exception as e:
+        print(f"[API] Primary fetch_sets failed: {e}. Falling back to TCGdex...")
+        return _fetch_sets_tcgdex()
+
+
+def _fetch_sets_tcgdex() -> list[dict]:
+    """Fallback fetcher using TCGdex API for sets."""
+    try:
+        resp = requests.get("https://api.tcgdex.net/v2/en/sets", timeout=30)
+        resp.raise_for_status()
+        raw_sets = resp.json()
+        out = []
+        for s in raw_sets:
+            out.append({
+                "id": s.get("id"),
+                "name": s.get("name", "Unknown set"),
+                "series": s.get("serie", {}).get("name") if isinstance(s.get("serie"), dict) else s.get("serie"),
+                "releaseDate": s.get("releaseDate"),
+                "images": {
+                    "logo": f"{s.get('logo')}.png" if s.get("logo") else None,
+                    "symbol": f"{s.get('symbol')}.png" if s.get("symbol") else None,
+                },
+                "total": s.get("cardCount", {}).get("total", 0)
+            })
+        return out
+    except Exception as e:
+        raise PokemonAPIError(f"Both primary API and TCGdex fallback failed: {e}")
 
 
 def fetch_cards_for_set(set_id: str) -> list[dict]:
-    """Retrieves ALL cards for a set with automatic pagination and retry logic."""
+    """Retrieves ALL cards for a set with automatic pagination, retry logic, and TCGdex fallback."""
     all_cards = []
     page = 1
-    page_size = 100  # Ridotto a 100 per alleggerire il carico sul server API ed evitare errori 500
-    max_retries = 3  # Numero massimo di tentativi in caso di errore 500 o problemi di rete
+    page_size = 50
+    max_retries = 5
+    primary_success = False
 
     while True:
         params = {"q": f"set.id:{set_id}", "page": page, "pageSize": page_size}
-        
-        success = False
+        batch_success = False
         payload = {}
+        
         for attempt in range(max_retries):
             try:
                 resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=60)
@@ -50,23 +76,24 @@ def fetch_cards_for_set(set_id: str) -> list[dict]:
                 if resp.status_code == 429:
                     raise PokemonAPIError("Rate limit reached.")
                 
-                # Se l'API restituisce un errore 500 o superiore, attendiamo e riproviamo
                 if resp.status_code >= 500:
                     print(f"[API] Server Error {resp.status_code} for set {set_id}. Retrying {attempt + 1}/{max_retries}...")
-                    time.sleep(2 ** attempt)  # Backoff esponenziale (1s, 2s, 4s)
+                    time.sleep(2 ** attempt)
                     continue
                 
                 resp.raise_for_status()
                 payload = resp.json()
-                success = True
+                batch_success = True
+                primary_success = True
                 break
                 
             except requests.exceptions.RequestException as e:
                 print(f"[API] Network error for set {set_id}: {e}. Retrying {attempt + 1}/{max_retries}...")
                 time.sleep(2 ** attempt)
 
-        if not success:
-            raise PokemonAPIError(f"The Pokémon TCG API is currently unavailable or returning errors for set {set_id}.")
+        if not batch_success:
+            print(f"[API] Primary API failed for set {set_id}. Trying TCGdex fallback...")
+            break
 
         batch = payload.get("data", [])
         all_cards.extend(batch)
@@ -76,25 +103,83 @@ def fetch_cards_for_set(set_id: str) -> list[dict]:
             break
         page += 1
 
-    return all_cards
+    if primary_success and len(all_cards) > 0:
+        return all_cards
+        
+    return _fetch_cards_tcgdex(set_id)
+
+
+def _fetch_cards_tcgdex(set_id: str) -> list[dict]:
+    """Fallback fetcher using TCGdex API for cards within a set."""
+    try:
+        resp = requests.get(f"https://api.tcgdex.net/v2/en/sets/{set_id}", timeout=60)
+        resp.raise_for_status()
+        data = resp.json()
+        cards = data.get("cards", [])
+        out = []
+        for c in cards:
+            img_base = c.get("image")
+            out.append({
+                "id": c.get("id"),
+                "name": c.get("name", "Unknown card"),
+                "number": c.get("localId"),
+                "rarity": c.get("rarity"),
+                "types": [c.get("types", [])[0]] if c.get("types") else None,
+                "nationalPokedexNumbers": [c.get("dexId")] if c.get("dexId") else None,
+                "images": {
+                    "small": f"{img_base}/low.png" if img_base else None,
+                    "large": f"{img_base}/high.png" if img_base else None,
+                },
+                "set": {
+                    "id": set_id
+                }
+            })
+        return out
+    except Exception as e:
+        raise PokemonAPIError(f"Both primary API and TCGdex fallback failed for {set_id}: {e}")
 
 
 # ---------- Emergency Live Search ----------
 
 def fetch_cards_by_pokedex(pokedex_number: int) -> list[dict]:
-    """Searches directly on the Pokémon TCG server for all cards matching a Pokédex ID."""
-    params = {"q": f"nationalPokedexNumbers:{pokedex_number}"}
-    resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=30)
-    resp.raise_for_status()
-    return resp.json().get("data", [])
+    try:
+        params = {"q": f"nationalPokedexNumbers:{pokedex_number}"}
+        resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=30)
+        resp.raise_for_status()
+        return resp.json().get("data", [])
+    except:
+        return []
 
 
 def fetch_cards_by_name(name: str) -> list[dict]:
-    """Searches directly on the Pokémon TCG server for cards matching a specific name."""
-    params = {"q": f"name:\"{name}*\""}
-    resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=30)
-    resp.raise_for_status()
-    return resp.json().get("data", [])
+    try:
+        params = {"q": f"name:\"{name}*\""}
+        resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=30)
+        resp.raise_for_status()
+        return resp.json().get("data", [])
+    except:
+        try:
+            resp = requests.get(f"https://api.tcgdex.net/v2/en/cards?name={name}", timeout=30)
+            resp.raise_for_status()
+            raw_cards = resp.json()
+            out = []
+            for c in raw_cards:
+                img_base = c.get("image")
+                out.append({
+                    "id": c.get("id"),
+                    "name": c.get("name", "Unknown card"),
+                    "number": c.get("localId"),
+                    "images": {
+                        "small": f"{img_base}/low.png" if img_base else None,
+                        "large": f"{img_base}/high.png" if img_base else None,
+                    },
+                    "set": {
+                        "id": c.get("set", {}).get("id") if isinstance(c.get("set"), dict) else None
+                    }
+                })
+            return out
+        except:
+            return []
 
 
 def normalize_set(raw: dict) -> dict:
@@ -114,12 +199,10 @@ def normalize_set(raw: dict) -> dict:
 _TCGPLAYER_VARIANT_PRIORITY = ["normal", "holofoil", "reverseHolofoil", "1stEditionHolofoil", "1stEditionNormal", "unlimitedHolofoil", "unlimited"]
 
 def _pick_tcgplayer_variant(tcg_prices: dict):
-    # Look for preferred variants that have AT LEAST one valid price valued
     for variant in _TCGPLAYER_VARIANT_PRIORITY:
         v = tcg_prices.get(variant)
         if v and any(v.get(k) is not None for k in ["market", "mid", "low", "high"]):
             return v
-    # Emergency fallback on any other variant
     for v in tcg_prices.values():
         if v and any(v.get(k) is not None for k in ["market", "mid", "low", "high"]):
             return v
@@ -168,21 +251,20 @@ def normalize_card(raw: dict, set_id: str) -> dict:
     raw_types = raw.get("types")
     types = ",".join(raw_types) if (raw_types and isinstance(raw_types, list)) else None
 
-    # Corrective image mapping for the McDonald's 2018 set (mcd18)
     if set_id == "mcd18":
         mcd_mapping = {
-            "1": ("sm1", "18"),   # Growlithe
-            "2": ("sm1", "28"),   # Psyduck
-            "3": ("sm3", "29"),   # Horsea
-            "4": ("sm1", "40"),   # Pikachu
-            "5": ("sm1", "42"),   # Slowpoke
-            "6": ("sm3", "64"),   # Machop
-            "7": ("sm3", "72"),   # Cubone
-            "8": ("sm5", "81"),   # Magnemite
-            "9": ("sm75", "34"),  # Dratini
-            "10": ("sm1", "101"), # Chansey
-            "11": ("sm5", "104"), # Eevee
-            "12": ("sm3", "105")  # Porygon
+            "1": ("sm1", "18"),   
+            "2": ("sm1", "28"),   
+            "3": ("sm3", "29"),   
+            "4": ("sm1", "40"),   
+            "5": ("sm1", "42"),   
+            "6": ("sm3", "64"),   
+            "7": ("sm3", "72"),   
+            "8": ("sm5", "81"),   
+            "9": ("sm75", "34"),  
+            "10": ("sm1", "101"), 
+            "11": ("sm5", "104"), 
+            "12": ("sm3", "105")  
         }
         if card_number in mcd_mapping:
             orig_set, orig_num = mcd_mapping[card_number]

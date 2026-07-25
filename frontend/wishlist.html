@@ -25,7 +25,6 @@
           <a href="binder.html" class="side-menu-link">📁 Binders</a>
           <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
           <a href="collezione.html" class="side-menu-link">★ My Collection</a>
-          <!-- VOCI MENU SOLO MOBILE -->
           <div class="mobile-only-menu-items">
             <a href="#" class="side-menu-link" onclick="if(typeof showAboutModal === 'function') showAboutModal()">👤 About</a>
             <a href="#" class="side-menu-link" style="color: var(--danger);" onclick="logoutUser()">🚪 Logout</a>
@@ -36,44 +35,49 @@
       <a href="index.html" class="brand"><span class="dot"></span> Pokyudex</a>
     </div>
     <div class="topbar-right">
-      <button class="btn" id="about-btn" title="About the creator">👤 About</button>
       <span id="current-username" class="user-badge"></span>
       <button class="btn" onclick="logoutUser()">Logout</button>
     </div>
   </div>
 
   <div class="container">
-    <h1 id="stats-header-title">Wishlist</h1>
+    <div id="main-header-texts-wishlist">
+      <h1 id="stats-header-title">Wishlist</h1>
 
-    <div class="stats-panel">
-      <div class="stat-card">
-        <div class="eyebrow" style="margin:0;">Wanted Cards</div>
-        <div class="stat-val" id="total-cards" style="color: var(--teal);">0</div>
+      <div class="stats-panel">
+        <div class="stat-card">
+          <div class="eyebrow" style="margin:0;">Wanted Cards</div>
+          <div class="stat-val" id="total-cards" style="color: var(--teal);">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="eyebrow" style="margin:0;">Estimated Cost (EUR)</div>
+          <div class="stat-val" id="total-val-eur">0.00 €</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div class="eyebrow" style="margin:0;">Estimated Cost (EUR)</div>
-        <div class="stat-val" id="total-val-eur">0.00 €</div>
-      </div>
-    </div>
 
-    <!-- STICKY BORDERLESS BOARDS CONTAINER -->
-    <div id="boards-section">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <div class="section-title" style="margin: 0;">Your Boards</div>
-        <button class="btn btn-accent" onclick="openNewBoardModal()">+ New Board</button>
+      <div id="boards-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div class="section-title" style="margin: 0;">Your Boards</div>
+          <button class="btn btn-accent" onclick="openNewBoardModal()">+ New Board</button>
+        </div>
+        <div class="boards-grid" id="boards-grid"></div>
       </div>
-      <div class="boards-grid" id="boards-grid"></div>
     </div>
 
     <div id="board-detail-view" style="display:none;">
+      
       <div class="binder-header" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 15px;">
-        <div style="flex: 1; min-width: 200px;">
-          <button class="btn" onclick="closeBoardDetail()" style="margin-bottom:10px;">&larr; All Boards</button><br>
-          <h2 id="board-detail-title" style="margin:0; font-family:'Rajdhani'; font-size:28px;"></h2>
+        <div class="binder-header-title" style="display: flex; flex-direction: column; align-items: flex-start; text-align: left;">
+          <button class="btn" onclick="closeBoardDetail()" style="margin-bottom:12px; align-self: flex-start;">&larr; All Boards</button>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h2 id="board-detail-title" style="margin:0; font-family:'Rajdhani'; font-size:32px;"></h2>
+            <button class="icon-btn" title="Edit board" onclick="openEditBoardModal(currentBoardId)" style="width:34px; height:34px; font-size:14px; flex-shrink:0;">✎</button>
+          </div>
         </div>
-        <div style="display:flex; gap: 12px; align-items: center;">
+        
+        <div class="board-header-actions" style="display:flex; gap: 12px; align-items: center;">
           <button class="btn btn-accent" onclick="openAddToBoardOverlay()">+ Add Cards</button>
-          <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="deleteCurrentBoard()">Delete Board</button>
+          <button class="btn binder-delete-btn" style="border-color:var(--danger); color:var(--danger);" onclick="deleteCurrentBoard()">Delete Board</button>
         </div>
       </div>
 
@@ -111,7 +115,6 @@
     </div>
   </div>
 
-  <!-- NEW BOARD MODAL -->
   <div id="new-board-modal" class="modal" onclick="closeNewBoardModal()">
     <div class="about-card" onclick="event.stopPropagation()" style="max-width:340px;">
       <button class="modal-close" onclick="closeNewBoardModal()">&times;</button>
@@ -129,7 +132,6 @@
     </div>
   </div>
 
-  <!-- EDIT BOARD MODAL -->
   <div id="edit-board-modal" class="modal" onclick="closeEditBoardModal()">
     <div class="about-card" onclick="event.stopPropagation()" style="max-width:340px;">
       <button class="modal-close" onclick="closeEditBoardModal()">&times;</button>
@@ -463,7 +465,6 @@
         await loadBoards();
         if (currentBoardId === editingBoardId) {
           document.getElementById('board-detail-title').textContent = name;
-          document.getElementById('stats-header-title').textContent = name;
         }
       } catch (err) {}
     }
@@ -495,10 +496,11 @@
       
       const bObj = boards.find(x => x.id === boardId);
       if(bObj) {
-        document.getElementById('stats-header-title').textContent = bObj.name;
+        document.getElementById('board-detail-title').textContent = bObj.name;
       }
       
       document.getElementById('main-wishlist-section').style.display = 'none';
+      document.getElementById('main-header-texts-wishlist').style.display = 'none';
       document.getElementById('board-detail-view').style.display = 'block';
       await renderBoardDetail();
     }
@@ -512,11 +514,11 @@
       currentBoardId = null;
       closeAddToBoardOverlay(); 
       
-      document.getElementById('stats-header-title').textContent = "Wishlist";
-      calculateStats(wishlist); 
-      
       document.getElementById('board-detail-view').style.display = 'none';
+      document.getElementById('main-header-texts-wishlist').style.display = 'block';
       document.getElementById('main-wishlist-section').style.display = 'block';
+      
+      calculateStats(wishlist); 
     }
 
     async function renderBoardDetail() {
@@ -525,10 +527,8 @@
       try {
         const data = await api(`/api/wishlist/boards/${currentBoardId}`);
         document.getElementById('board-detail-title').textContent = data.board.name;
-        document.getElementById('board-detail-title').style.borderBottom = `3px solid ${data.board.color}`;
         currentBoardCards = data.cards;
         
-        calculateStats(currentBoardCards); 
         renderBoardCardsGrid();
       } catch (err) {
         container.innerHTML = `<div class="state-msg error">Error: ${err.message}</div>`;
