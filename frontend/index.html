@@ -59,6 +59,7 @@
       <a href="index.html" class="brand"><span class="dot"></span> Pokyudex</a>
     </div>
     <div class="topbar-right">
+      <button class="btn" id="admin-fetch-new-sets-btn" style="display:none;" title="Download new sets from API">📥 Update Sets</button>
       <button class="btn" id="admin-resync-btn" style="display:none;" title="Force resync of all sets">🔄 Resync All</button>
       <button class="btn" id="about-btn" title="About the creator">👤 About</button>
       <span id="current-username" class="user-badge"></span>
@@ -350,8 +351,25 @@
 
     function initAdminResync(user) {
       const btn = document.getElementById('admin-resync-btn');
+      const fetchBtn = document.getElementById('admin-fetch-new-sets-btn');
       if (!user || !user.is_admin) return;
       btn.style.display = 'inline-flex';
+      if (fetchBtn) fetchBtn.style.display = 'inline-flex';
+
+      if (fetchBtn) {
+        fetchBtn.addEventListener('click', async () => {
+          fetchBtn.disabled = true;
+          fetchBtn.textContent = '📥 Fetching...';
+          try {
+            await api('/api/sets/refresh', { method: 'POST' });
+            window.location.reload();
+          } catch (err) {
+            alert('Error: ' + err.message);
+            fetchBtn.disabled = false;
+            fetchBtn.textContent = '📥 Update Sets';
+          }
+        });
+      }
 
       let polling = null;
 

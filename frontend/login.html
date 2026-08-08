@@ -50,6 +50,35 @@
       font-size: 14px;
     }
     .auth-field input:not([type="checkbox"]):focus { outline: none; border-color: var(--teal); }
+    
+    /* Stili aggiunti per il pulsante mostra/nascondi password */
+    .password-wrapper {
+      position: relative;
+      width: 100%;
+    }
+    .password-wrapper input {
+      padding-right: 40px !important; /* Lascia spazio per l'icona */
+    }
+    .password-toggle-btn {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s ease;
+    }
+    .password-toggle-btn:hover {
+      color: var(--teal);
+    }
+
     .auth-submit { width: 100%; margin-top: 6px; height: 42px; }
     .auth-switch {
       text-align: center;
@@ -91,14 +120,20 @@
         </div>
         <div class="auth-field">
           <label>Password</label>
-          <input type="password" id="auth-password" required autocomplete="current-password" minlength="8" />
+          <div class="password-wrapper">
+            <input type="password" id="auth-password" required autocomplete="current-password" minlength="8" />
+            <button type="button" class="password-toggle-btn" onclick="togglePassword('auth-password', this)" title="Show/Hide Password">👁️</button>
+          </div>
           <div id="password-hint" style="display:none; font-size:11px; color:var(--text-muted); margin-top:6px;">
             At least 8 characters, with one letter and one number.
           </div>
         </div>
         <div class="auth-field" id="confirm-password-field" style="display:none;">
           <label>Confirm Password</label>
-          <input type="password" id="auth-password-confirm" autocomplete="new-password" minlength="8" />
+          <div class="password-wrapper">
+            <input type="password" id="auth-password-confirm" autocomplete="new-password" minlength="8" />
+            <button type="button" class="password-toggle-btn" onclick="togglePassword('auth-password-confirm', this)" title="Show/Hide Password">👁️</button>
+          </div>
         </div>
         
         <!-- Nuova Checkbox Remember Me -->
@@ -133,6 +168,18 @@
     const usernameField = document.getElementById('username-field');
     const usernameInput = document.getElementById('auth-username');
     const rememberCheckbox = document.getElementById('auth-remember');
+
+    // Funzione per il toggle della visibilità password
+    function togglePassword(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '🙈';
+      } else {
+        input.type = 'password';
+        btn.textContent = '👁️';
+      }
+    }
 
     function showError(msg) {
       errorBox.textContent = msg;
