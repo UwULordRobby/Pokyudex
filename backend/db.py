@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS sets (
     symbol_url TEXT,
     total_cards INTEGER,
     last_synced TEXT,
-    language TEXT DEFAULT 'en'
+    language TEXT DEFAULT 'en',
+    tcgdex_order INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS cards (
@@ -223,6 +224,9 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+        if not _column_exists(conn, "sets", "tcgdex_order"):
+            conn.execute("ALTER TABLE sets ADD COLUMN tcgdex_order INTEGER DEFAULT 0")
+
         _migrate_to_multiuser(conn)
 
         if not _column_exists(conn, "users", "username"):
@@ -293,8 +297,8 @@ def claim_legacy_data(conn, user_id: int):
 def upsert_set(conn, set_data: dict):
     conn.execute(
         """
-        INSERT INTO sets (id, name, series, release_date, logo_url, symbol_url, total_cards, last_synced, language)
-        VALUES (:id, :name, :series, :release_date, :logo_url, :symbol_url, :total_cards, :last_synced, :language)
+        INSERT INTO sets (id, name, series, release_date, logo_url, symbol_url, total_cards, last_synced, language, tcgdex_order)
+        VALUES (:id, :name, :series, :release_date, :logo_url, :symbol_url, :total_cards, :last_synced, :language, :tcgdex_order)
         ON CONFLICT(id) DO UPDATE SET
             name=excluded.name,
             series=excluded.series,
@@ -303,7 +307,8 @@ def upsert_set(conn, set_data: dict):
             symbol_url=excluded.symbol_url,
             total_cards=excluded.total_cards,
             last_synced=COALESCE(excluded.last_synced, sets.last_synced),
-            language=COALESCE(excluded.language, sets.language)
+            language=COALESCE(excluded.language, sets.language),
+            tcgdex_order=COALESCE(excluded.tcgdex_order, sets.tcgdex_order)
         """,
         set_data,
     )
@@ -346,14 +351,14 @@ def get_all_sets(conn, user_id=None, lang='en'):
             """SELECT *,
                (SELECT 1 FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS is_favorite,
                (SELECT sort_order FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS fav_sort_order
-               FROM sets ORDER BY release_date DESC""",
+               FROM sets ORDER BY release_date DESC, tcgdex_order DESC, rowid DESC""",
             (user_id, user_id),
         ).fetchall()
     return conn.execute(
         """SELECT *,
            (SELECT 1 FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS is_favorite,
            (SELECT sort_order FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS fav_sort_order
-           FROM sets WHERE language = ? ORDER BY release_date DESC""",
+           FROM sets WHERE language = ? ORDER BY release_date DESC, tcgdex_order DESC, rowid DESC""",
         (user_id, user_id, lang),
     ).fetchall()
 
@@ -403,7 +408,7 @@ def get_rarities_for_set(conn, set_id: str):
 
 def search_cards_global(conn, name=None, rarity=None, pokedex_number=None, user_id=None, card_type=None, lang='en'):
     query = """
-        SELECT cards.*, sets.name AS set_name, sets.release_date,
+        SELECT cards.*, sets.name AS set_name, sets.release_date, sets.tcgdex_order,
                (SELECT 1 FROM collection WHERE card_id = cards.id AND user_id = ?) AS is_owned,
                (SELECT 1 FROM wishlist WHERE card_id = cards.id AND user_id = ?) AS is_wished
         FROM cards
@@ -433,7 +438,7 @@ def search_cards_global(conn, name=None, rarity=None, pokedex_number=None, user_
         query += " AND (',' || cards.types || ',') LIKE ?"
         params.append(f"%,{card_type},%")
 
-    query += " ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC"
+    query += " ORDER BY sets.release_date DESC, sets.tcgdex_order DESC, sets.rowid DESC, cards.price_market IS NULL, cards.price_market DESC"
     return conn.execute(query, params).fetchall()
 
 
@@ -491,7 +496,7 @@ def get_user_collection(conn, user_id: int):
            JOIN cards ON collection.card_id = cards.id
            JOIN sets ON cards.set_id = sets.id
            WHERE collection.user_id = ?
-           ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC""",
+           ORDER BY sets.release_date DESC, sets.tcgdex_order DESC, sets.rowid DESC, cards.price_market IS NULL, cards.price_market DESC""",
         (user_id,),
     ).fetchall()
 
@@ -503,7 +508,7 @@ def get_user_wishlist(conn, user_id: int):
            JOIN cards ON wishlist.card_id = cards.id
            JOIN sets ON cards.set_id = sets.id
            WHERE wishlist.user_id = ?
-           ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC""",
+           ORDER BY sets.release_date DESC, sets.tcgdex_order DESC, sets.rowid DESC, cards.price_market IS NULL, cards.price_market DESC""",
         (user_id,),
     ).fetchall()
 
@@ -611,7 +616,7 @@ def get_uncategorized_wishlist(conn, user_id: int):
            JOIN cards ON wishlist.card_id = cards.id
            JOIN sets ON cards.set_id = sets.id
            WHERE wishlist.user_id = ?
-           ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC""",
+           ORDER BY sets.release_date DESC, sets.tcgdex_order DESC, sets.rowid DESC, cards.price_market IS NULL, cards.price_market DESC""",
         (user_id,),
     ).fetchall()
 
@@ -690,7 +695,7 @@ def get_wishlist_board_cards(conn, board_id: int):
            JOIN cards ON wbc.card_id = cards.id
            JOIN sets ON cards.set_id = sets.id
            WHERE wbc.board_id = ?
-           ORDER BY wbc.sort_order ASC, sets.release_date DESC""",
+           ORDER BY wbc.sort_order ASC, sets.release_date DESC, sets.tcgdex_order DESC, sets.rowid DESC""",
         (board_id,)
     ).fetchall()
 

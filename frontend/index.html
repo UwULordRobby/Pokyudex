@@ -255,7 +255,8 @@
           <div class="drag-handle" title="Drag to reorder">⠿</div>
           ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
           <div class="set-name">${escapeHtml(s.name)}</div>
-          <div class="set-meta">${escapeHtml(s.id ? '[' + s.id.toUpperCase() + '] ' : '')}${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+          <div class="set-meta" style="color: var(--teal); font-weight: bold; margin-bottom: 2px;">${escapeHtml(s.id ? '[' + s.id.toUpperCase() + '] ' : '')}</div>
+          <div class="set-meta">${escapeHtml(s.series || 'Other Era')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
         `;
 
         tile.addEventListener('dragstart', (e) => {
@@ -329,7 +330,7 @@
       const eraOrder = [];
 
       sets.forEach((s) => {
-        let era = s.series || 'Other';
+        let era = s.series || 'Other Era';
         if (era.toLowerCase() === 'xy') {
           era = 'XY / Mega Evolution';
         }
@@ -366,7 +367,8 @@
             <button class="collect-btn ${s.is_favorite ? 'owned' : ''}" style="top: 8px; right: 8px; left: auto; font-size:14px;" onclick="event.stopPropagation(); toggleFavoriteSet('${s.id}', this)">★</button>
             ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
             <div class="set-name">${escapeHtml(s.name)}</div>
-            <div class="set-meta">${escapeHtml(s.id ? '[' + s.id.toUpperCase() + '] ' : '')}${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+            <div class="set-meta" style="color: var(--teal); font-weight: bold; margin-bottom: 2px;">${escapeHtml(s.id ? '[' + s.id.toUpperCase() + '] ' : '')}</div>
+            <div class="set-meta">${escapeHtml(s.series || 'Other Era')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
           `;
           grid.appendChild(tile);
         });
@@ -441,6 +443,7 @@
 
       btn.addEventListener('click', async () => {
         try {
+          // Passiamo correttamente la lingua del selettore anche al Resync All
           await api(`/api/admin/resync-all?lang=${currentLang}`, { method: 'POST' });
           setButtonState({ running: true, total: 0, done: 0 });
           polling = setInterval(pollStatus, 2000);

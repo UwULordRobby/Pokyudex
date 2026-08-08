@@ -275,10 +275,12 @@ def _preload_all_sets_worker():
     print("[Background Sync] Starting background card preload...")
     try:
         with db.get_conn() as conn:
+            # Peschiamo direttamente tutti i set che necessitano di sync senza filtri di utente
             sets = conn.execute("SELECT * FROM sets WHERE last_synced IS NULL").fetchall()
 
         for s in sets:
             set_id = s["id"]
+            # Convertiamo sqlite3.Row in dict per usare .get in sicurezza
             lang = dict(s).get("language", "en")
             print(f"[Background Sync] Downloading cards for: {s['name']} ({set_id}) [{lang}]...")
             try:
@@ -551,15 +553,28 @@ def api_search_cards():
     else:
         pokedex_number = None
 
-    # Autodettaglio Pokédex per ricerche testuali (es. "Pikachu" -> #25)
+    # Autodettaglio Pokédex per ricerche testuali
+    # (Se scrivi "Pikachu" ma sei nel tab Giapponese, il DB lo traduce in #25 in automatico)
     if name and not pokedex_number:
         with db.get_conn() as conn:
             row = conn.execute(
-                "SELECT national_dex FROM cards WHERE name LIKE ? AND national_dex IS NOT NULL LIMIT 1",
+                "SELECT national_dex FROM cards WHERE name LIKE ? COLLATE NOCASE AND national_dex IS NOT NULL LIMIT 1",
                 (f"%{name}%",)
             ).fetchone()
             if row and row["national_dex"]:
                 pokedex_number = row["national_dex"]
+        
+        # Se ancora non l'abbiamo trovato nel database locale, forziamo una chiamata all'API INGLESE
+        # per scoprire di che numero Pokedex si tratta, prima di cercare in giapponese/cinese!
+        if not pokedex_number and len(name) >= 3:
+            try:
+                eng_cards = pokemon_api.fetch_cards_by_name(name, 'en')
+                for ec in eng_cards:
+                    if ec.get("nationalPokedexNumbers"):
+                        pokedex_number = ec["nationalPokedexNumbers"][0]
+                        break
+            except Exception as e:
+                print(f"[Search] Pokedex auto-resolve error: {e}")
 
     with db.get_conn() as conn:
         cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type, lang)

@@ -38,8 +38,10 @@ def fetch_sets(lang='en') -> list[dict]:
             resp.raise_for_status()
             payload = resp.json()
             data = payload.get("data", [])
-            for d in data:
+            for i, d in enumerate(data):
                 d['language'] = 'en'
+                # L'API inglese li restituisce già dal più nuovo al più vecchio
+                d['tcgdex_order'] = 0 
             all_sets.extend(data)
             
             total_count = payload.get("totalCount", len(all_sets))
@@ -61,7 +63,9 @@ def _fetch_sets_tcgdex(lang='en') -> list[dict]:
         resp.raise_for_status()
         raw_sets = resp.json()
         out = []
-        for s in raw_sets:
+        # TCGdex restituisce i set dal più VECCHIO al più NUOVO. 
+        # Aggiungiamo tcgdex_order incrementale per ordinarli correttamente.
+        for i, s in enumerate(raw_sets):
             out.append({
                 "id": s.get("id"),
                 "name": s.get("name", "Unknown set"),
@@ -72,7 +76,8 @@ def _fetch_sets_tcgdex(lang='en') -> list[dict]:
                     "symbol": f"{s.get('symbol')}.png" if s.get("symbol") else None,
                 },
                 "total": s.get("cardCount", {}).get("total", 0),
-                "language": lang
+                "language": lang,
+                "tcgdex_order": i
             })
         return out
     except Exception as e:
@@ -180,8 +185,14 @@ def fetch_cards_by_pokedex(pokedex_number: int, lang='en') -> list[dict]:
             out = []
             for c in cards:
                 img_base = c.get("image")
+                
+                # TCGdex non invia l'oggetto 'set' nella lista pokedex, ma possiamo estrarre il set ID 
+                # direttamente dall'ID della carta (es. 's8b-025' -> 's8b')
+                c_id = c.get("id", "")
+                s_id = c_id.rsplit("-", 1)[0] if "-" in c_id else None
+                
                 out.append({
-                    "id": c.get("id"),
+                    "id": c_id,
                     "name": c.get("name", "Unknown card"),
                     "number": c.get("localId"),
                     "nationalPokedexNumbers": [pokedex_number],
@@ -190,7 +201,7 @@ def fetch_cards_by_pokedex(pokedex_number: int, lang='en') -> list[dict]:
                         "large": f"{img_base}/high.png" if img_base else None,
                     },
                     "set": {
-                        "id": c.get("set", {}).get("id") if isinstance(c.get("set"), dict) else None
+                        "id": s_id
                     },
                     "language": lang
                 })
@@ -281,7 +292,8 @@ def normalize_set(raw: dict) -> dict:
         "symbol_url": images.get("symbol"),
         "total_cards": raw.get("total") or raw.get("printedTotal"),
         "last_synced": None,
-        "language": raw.get("language", "en")
+        "language": raw.get("language", "en"),
+        "tcgdex_order": raw.get("tcgdex_order", 0)
     }
 
 
