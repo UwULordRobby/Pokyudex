@@ -38,9 +38,8 @@ def fetch_sets(lang='en') -> list[dict]:
             resp.raise_for_status()
             payload = resp.json()
             data = payload.get("data", [])
-            for i, d in enumerate(data):
+            for d in data:
                 d['language'] = 'en'
-                # L'API inglese li restituisce già dal più nuovo al più vecchio
                 d['tcgdex_order'] = 0 
             all_sets.extend(data)
             
@@ -63,11 +62,11 @@ def _fetch_sets_tcgdex(lang='en') -> list[dict]:
         resp.raise_for_status()
         raw_sets = resp.json()
         out = []
-        # TCGdex restituisce i set dal più VECCHIO al più NUOVO. 
-        # Aggiungiamo tcgdex_order incrementale per ordinarli correttamente.
         for i, s in enumerate(raw_sets):
+            orig_id = s.get("id")
+            # Isoliamo gli ID asiatici per non sovrascrivere quelli inglesi (es. sv7 -> sv7-ja)
             out.append({
-                "id": s.get("id"),
+                "id": orig_id if lang == 'en' else f"{orig_id}-{lang}",
                 "name": s.get("name", "Unknown set"),
                 "series": s.get("serie", {}).get("name") if isinstance(s.get("serie"), dict) else s.get("serie"),
                 "releaseDate": s.get("releaseDate"),
@@ -144,16 +143,22 @@ def fetch_cards_for_set(set_id: str, lang='en') -> list[dict]:
 
 def _fetch_cards_tcgdex(set_id: str, lang='en') -> list[dict]:
     """Fallback fetcher using TCGdex API for cards within a set."""
+    # Rimuoviamo il nostro suffisso (-ja, -zh-cn) per fare la chiamata reale al server
+    orig_set_id = set_id
+    if lang != 'en' and set_id.endswith(f"-{lang}"):
+        orig_set_id = set_id[:-(len(lang)+1)]
+        
     try:
-        resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/sets/{set_id}", timeout=60)
+        resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/sets/{orig_set_id}", timeout=60)
         resp.raise_for_status()
         data = resp.json()
         cards = data.get("cards", [])
         out = []
         for c in cards:
             img_base = c.get("image")
+            orig_c_id = c.get("id")
             out.append({
-                "id": c.get("id"),
+                "id": orig_c_id if lang == 'en' else f"{orig_c_id}-{lang}",
                 "name": c.get("name", "Unknown card"),
                 "number": c.get("localId"),
                 "rarity": c.get("rarity"),
@@ -164,7 +169,7 @@ def _fetch_cards_tcgdex(set_id: str, lang='en') -> list[dict]:
                     "large": f"{img_base}/high.png" if img_base else None,
                 },
                 "set": {
-                    "id": set_id
+                    "id": set_id # Manteniamo l'ID isolato
                 },
                 "language": lang
             })
@@ -185,14 +190,11 @@ def fetch_cards_by_pokedex(pokedex_number: int, lang='en') -> list[dict]:
             out = []
             for c in cards:
                 img_base = c.get("image")
-                
-                # TCGdex non invia l'oggetto 'set' nella lista pokedex, ma possiamo estrarre il set ID 
-                # direttamente dall'ID della carta (es. 's8b-025' -> 's8b')
                 c_id = c.get("id", "")
-                s_id = c_id.rsplit("-", 1)[0] if "-" in c_id else None
+                orig_s_id = c_id.rsplit("-", 1)[0] if "-" in c_id else None
                 
                 out.append({
-                    "id": c_id,
+                    "id": c_id if lang == 'en' else f"{c_id}-{lang}",
                     "name": c.get("name", "Unknown card"),
                     "number": c.get("localId"),
                     "nationalPokedexNumbers": [pokedex_number],
@@ -201,7 +203,7 @@ def fetch_cards_by_pokedex(pokedex_number: int, lang='en') -> list[dict]:
                         "large": f"{img_base}/high.png" if img_base else None,
                     },
                     "set": {
-                        "id": s_id
+                        "id": orig_s_id if lang == 'en' else (f"{orig_s_id}-{lang}" if orig_s_id else None)
                     },
                     "language": lang
                 })
@@ -230,8 +232,10 @@ def fetch_cards_by_name(name: str, lang='en') -> list[dict]:
             out = []
             for c in raw_cards:
                 img_base = c.get("image")
+                c_id = c.get("id")
+                orig_s_id = c.get("set", {}).get("id") if isinstance(c.get("set"), dict) else None
                 out.append({
-                    "id": c.get("id"),
+                    "id": c_id if lang == 'en' else f"{c_id}-{lang}",
                     "name": c.get("name", "Unknown card"),
                     "number": c.get("localId"),
                     "images": {
@@ -239,7 +243,7 @@ def fetch_cards_by_name(name: str, lang='en') -> list[dict]:
                         "large": f"{img_base}/high.png" if img_base else None,
                     },
                     "set": {
-                        "id": c.get("set", {}).get("id") if isinstance(c.get("set"), dict) else None
+                        "id": orig_s_id if lang == 'en' else (f"{orig_s_id}-{lang}" if orig_s_id else None)
                     },
                     "language": lang
                 })
