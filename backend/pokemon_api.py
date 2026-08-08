@@ -19,23 +19,45 @@ def _headers():
     return headers
 
 
-def fetch_sets() -> list[dict]:
-    """Retrieves the list of all available expansions, with fallback to TCGdex."""
+def fetch_sets(lang='en') -> list[dict]:
+    """Retrieves the list of all available expansions, with language support."""
+    if lang != 'en':
+        return _fetch_sets_tcgdex(lang)
+
     try:
-        resp = requests.get(f"{API_BASE_URL}/sets", headers=_headers(), timeout=30)
-        if resp.status_code == 429:
-            raise PokemonAPIError("Rate limit reached. If you do not have a free API key yet, register at https://dev.pokemontcg.io.")
-        resp.raise_for_status()
-        return resp.json().get("data", [])
+        all_sets = []
+        page = 1
+        page_size = 250
+        while True:
+            params = {"page": page, "pageSize": page_size}
+            resp = requests.get(f"{API_BASE_URL}/sets", headers=_headers(), params=params, timeout=30)
+            
+            if resp.status_code == 429:
+                raise PokemonAPIError("Rate limit reached. If you do not have a free API key yet, register at https://dev.pokemontcg.io.")
+            
+            resp.raise_for_status()
+            payload = resp.json()
+            data = payload.get("data", [])
+            for d in data:
+                d['language'] = 'en'
+            all_sets.extend(data)
+            
+            total_count = payload.get("totalCount", len(all_sets))
+            if len(data) < page_size or len(all_sets) >= total_count:
+                break
+            
+            page += 1
+            
+        return all_sets
     except Exception as e:
         print(f"[API] Primary fetch_sets failed: {e}. Falling back to TCGdex...")
-        return _fetch_sets_tcgdex()
+        return _fetch_sets_tcgdex('en')
 
 
-def _fetch_sets_tcgdex() -> list[dict]:
-    """Fallback fetcher using TCGdex API for sets."""
+def _fetch_sets_tcgdex(lang='en') -> list[dict]:
+    """Fallback fetcher using TCGdex API for sets, supports multiple languages."""
     try:
-        resp = requests.get("https://api.tcgdex.net/v2/en/sets", timeout=30)
+        resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/sets", timeout=30)
         resp.raise_for_status()
         raw_sets = resp.json()
         out = []
@@ -49,15 +71,19 @@ def _fetch_sets_tcgdex() -> list[dict]:
                     "logo": f"{s.get('logo')}.png" if s.get("logo") else None,
                     "symbol": f"{s.get('symbol')}.png" if s.get("symbol") else None,
                 },
-                "total": s.get("cardCount", {}).get("total", 0)
+                "total": s.get("cardCount", {}).get("total", 0),
+                "language": lang
             })
         return out
     except Exception as e:
-        raise PokemonAPIError(f"Both primary API and TCGdex fallback failed: {e}")
+        raise PokemonAPIError(f"TCGdex fallback failed for language {lang}: {e}")
 
 
-def fetch_cards_for_set(set_id: str) -> list[dict]:
-    """Retrieves ALL cards for a set with automatic pagination, retry logic, and TCGdex fallback."""
+def fetch_cards_for_set(set_id: str, lang='en') -> list[dict]:
+    """Retrieves ALL cards for a set with automatic pagination and language support."""
+    if lang != 'en':
+        return _fetch_cards_tcgdex(set_id, lang)
+
     all_cards = []
     page = 1
     page_size = 50
@@ -96,6 +122,8 @@ def fetch_cards_for_set(set_id: str) -> list[dict]:
             break
 
         batch = payload.get("data", [])
+        for c in batch:
+            c['language'] = 'en'
         all_cards.extend(batch)
 
         total_count = payload.get("totalCount", len(all_cards))
@@ -106,13 +134,13 @@ def fetch_cards_for_set(set_id: str) -> list[dict]:
     if primary_success and len(all_cards) > 0:
         return all_cards
         
-    return _fetch_cards_tcgdex(set_id)
+    return _fetch_cards_tcgdex(set_id, 'en')
 
 
-def _fetch_cards_tcgdex(set_id: str) -> list[dict]:
+def _fetch_cards_tcgdex(set_id: str, lang='en') -> list[dict]:
     """Fallback fetcher using TCGdex API for cards within a set."""
     try:
-        resp = requests.get(f"https://api.tcgdex.net/v2/en/sets/{set_id}", timeout=60)
+        resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/sets/{set_id}", timeout=60)
         resp.raise_for_status()
         data = resp.json()
         cards = data.get("cards", [])
@@ -132,7 +160,8 @@ def _fetch_cards_tcgdex(set_id: str) -> list[dict]:
                 },
                 "set": {
                     "id": set_id
-                }
+                },
+                "language": lang
             })
         return out
     except Exception as e:
@@ -146,17 +175,48 @@ def fetch_cards_by_pokedex(pokedex_number: int) -> list[dict]:
         params = {"q": f"nationalPokedexNumbers:{pokedex_number}"}
         resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=30)
         resp.raise_for_status()
-        return resp.json().get("data", [])
+        data = resp.json().get("data", [])
+        for d in data:
+            d['language'] = 'en'
+        return data
     except:
         return []
 
 
-def fetch_cards_by_name(name: str) -> list[dict]:
+def fetch_cards_by_name(name: str, lang='en') -> list[dict]:
+    if lang != 'en':
+        try:
+            resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/cards?name={name}", timeout=30)
+            resp.raise_for_status()
+            raw_cards = resp.json()
+            out = []
+            for c in raw_cards:
+                img_base = c.get("image")
+                out.append({
+                    "id": c.get("id"),
+                    "name": c.get("name", "Unknown card"),
+                    "number": c.get("localId"),
+                    "images": {
+                        "small": f"{img_base}/low.png" if img_base else None,
+                        "large": f"{img_base}/high.png" if img_base else None,
+                    },
+                    "set": {
+                        "id": c.get("set", {}).get("id") if isinstance(c.get("set"), dict) else None
+                    },
+                    "language": lang
+                })
+            return out
+        except:
+            return []
+
     try:
         params = {"q": f"name:\"{name}*\""}
         resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=30)
         resp.raise_for_status()
-        return resp.json().get("data", [])
+        data = resp.json().get("data", [])
+        for d in data:
+            d['language'] = 'en'
+        return data
     except:
         try:
             resp = requests.get(f"https://api.tcgdex.net/v2/en/cards?name={name}", timeout=30)
@@ -175,7 +235,8 @@ def fetch_cards_by_name(name: str) -> list[dict]:
                     },
                     "set": {
                         "id": c.get("set", {}).get("id") if isinstance(c.get("set"), dict) else None
-                    }
+                    },
+                    "language": 'en'
                 })
             return out
         except:
@@ -193,6 +254,7 @@ def normalize_set(raw: dict) -> dict:
         "symbol_url": images.get("symbol"),
         "total_cards": raw.get("total") or raw.get("printedTotal"),
         "last_synced": None,
+        "language": raw.get("language", "en")
     }
 
 
@@ -293,4 +355,5 @@ def normalize_card(raw: dict, set_id: str) -> dict:
         "last_updated": last_updated,
         "national_dex": national_dex,
         "types": types,
+        "language": raw.get("language", "en")
     }

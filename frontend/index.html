@@ -37,6 +37,10 @@
       text-transform: uppercase;
       letter-spacing: 1.5px;
     }
+    .lang-selector .chip {
+      padding: 6px 14px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -71,9 +75,18 @@
     <div class="eyebrow">Pokyudex &mdash; Search Panel</div>
     <h1>What would you like to search for today?</h1>
     
-    <div class="filters" style="position: static; background: none; backdrop-filter: none; border-bottom: none; padding: 10px 0 20px;">
-      <div class="chip active" id="tab-sets-btn">Browse Sets</div>
-      <div class="chip" id="tab-cards-btn">Global Card Search</div>
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div class="filters" style="position: static; background: none; backdrop-filter: none; border-bottom: none; padding: 10px 0 20px;">
+          <div class="chip active" id="tab-sets-btn">Browse Sets</div>
+          <div class="chip" id="tab-cards-btn">Global Card Search</div>
+        </div>
+        
+        <!-- SELETTORE DELLA LINGUA -->
+        <div class="lang-selector" style="display:flex; gap:8px;">
+          <div class="chip" onclick="changeLang('en', this)">🇬🇧 English</div>
+          <div class="chip" onclick="changeLang('ja', this)">🇯🇵 日本語</div>
+          <div class="chip" onclick="changeLang('zh-tw', this)">🇹🇼 中文</div>
+        </div>
     </div>
 
     <div id="section-sets">
@@ -132,6 +145,31 @@
     let globalSearchResults = []; 
     let raritiesLoaded = false;
     let typesLoaded = false;
+    let currentLang = localStorage.getItem('pokyudex_lang') || 'en';
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const btns = document.querySelectorAll('.lang-selector .chip');
+        btns.forEach(b => {
+            if(b.getAttribute('onclick').includes(currentLang)) {
+                btns.forEach(x => x.classList.remove('active'));
+                b.classList.add('active');
+            }
+        });
+    });
+
+    function changeLang(lang, btnElement) {
+        currentLang = lang;
+        localStorage.setItem('pokyudex_lang', lang);
+        
+        const btns = document.querySelectorAll('.lang-selector .chip');
+        btns.forEach(b => b.classList.remove('active'));
+        btnElement.classList.add('active');
+        
+        loadSets();
+        if (sectionCards.style.display === 'block') {
+            searchCardsGlobal();
+        }
+    }
 
     const tabSetsBtn = document.getElementById('tab-sets-btn');
     const tabCardsBtn = document.getElementById('tab-cards-btn');
@@ -177,7 +215,7 @@
       
       try {
           if (matchedSets.length === 0) container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Searching deep...</div>';
-          const cards = await api(`/api/cards/search?name=${encodeURIComponent(query)}`);
+          const cards = await api(`/api/cards/search?name=${encodeURIComponent(query)}&lang=${currentLang}`);
           const setIdsFromCards = new Set(cards.map(c => c.set_id));
           const extraSets = allSets.filter(s => setIdsFromCards.has(s.id) && !matchedSets.includes(s));
           matchedSets = [...matchedSets, ...extraSets];
@@ -281,7 +319,7 @@
 
     function renderSetsGrid(sets, container) {
       if (!sets.length) {
-        container.innerHTML = '<div class="state-msg">No sets found.</div>';
+        container.innerHTML = '<div class="state-msg">No sets found for this language. Click "Update Sets" to fetch them.</div>';
         return;
       }
       
@@ -338,8 +376,9 @@
 
     async function loadSets() {
       const container = document.getElementById('sets-container');
+      container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Loading sets...</div>';
       try {
-        const data = await api('/api/sets');
+        const data = await api(`/api/sets?lang=${currentLang}`);
         allSets = data;
         renderSetsPage();
       } catch (err) {
@@ -361,7 +400,7 @@
           fetchBtn.disabled = true;
           fetchBtn.textContent = '📥 Fetching...';
           try {
-            await api('/api/sets/refresh', { method: 'POST' });
+            await api(`/api/sets/refresh?lang=${currentLang}`, { method: 'POST' });
             window.location.reload();
           } catch (err) {
             alert('Error: ' + err.message);
@@ -538,7 +577,7 @@
       container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Searching...</div>';
 
       try {
-        const url = `/api/cards/search?name=${encodeURIComponent(name)}&rarity=${encodeURIComponent(rarity)}&type=${encodeURIComponent(type)}`;
+        const url = `/api/cards/search?name=${encodeURIComponent(name)}&rarity=${encodeURIComponent(rarity)}&type=${encodeURIComponent(type)}&lang=${currentLang}`;
         globalSearchResults = await api(url);
         
         if (!globalSearchResults.length) {

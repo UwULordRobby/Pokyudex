@@ -263,8 +263,8 @@ def api_set_avatar():
         conn.execute("UPDATE users SET avatar_pokemon_id = ? WHERE id = ?", (pokemon_id, session["user_id"]))
     return jsonify({"success": True, "avatar_pokemon_id": pokemon_id})
 
-def _sync_set_core(conn, set_id: str):
-    raw_cards = pokemon_api.fetch_cards_for_set(set_id)
+def _sync_set_core(conn, set_id: str, lang='en'):
+    raw_cards = pokemon_api.fetch_cards_for_set(set_id, lang)
     now = datetime.datetime.utcnow().isoformat()
     for raw in raw_cards:
         db.upsert_card(conn, pokemon_api.normalize_card(raw, set_id))
@@ -279,12 +279,13 @@ def _preload_all_sets_worker():
 
         for s in sets:
             set_id = s["id"]
+            lang = s.get("language", "en")
             with db.get_conn() as conn:
                 set_row = db.get_set(conn, set_id)
                 if set_row and not set_row["last_synced"]:
-                    print(f"[Background Sync] Downloading cards for: {s['name']} ({set_id})...")
+                    print(f"[Background Sync] Downloading cards for: {s['name']} ({set_id}) [{lang}]...")
                     try:
-                        _sync_set_core(conn, set_id)
+                        _sync_set_core(conn, set_id, lang)
                         time.sleep(2)
                     except Exception as e:
                         print(f"[Background Sync] Error downloading {s['name']}: {e}")
@@ -319,11 +320,12 @@ def _force_resync_all_worker():
 
         for s in sets:
             set_id = s["id"]
+            lang = s.get("language", "en")
             _force_resync_status["current_set"] = s["name"]
             try:
                 with db.get_conn() as conn:
-                    _sync_set_core(conn, set_id)
-                print(f"[Admin Resync] Sincronizzato {s['name']} ({set_id})")
+                    _sync_set_core(conn, set_id, lang)
+                print(f"[Admin Resync] Sincronizzato {s['name']} ({set_id}) [{lang}]")
                 time.sleep(2)
             except Exception as e:
                 print(f"[Admin Resync] Errore su {s['name']}: {e}")
@@ -378,10 +380,11 @@ def _weekly_refresh_worker():
 
             for s in stale_sets:
                 set_id = s["id"]
+                lang = s.get("language", "en")
                 try:
                     with db.get_conn() as conn:
-                        _sync_set_core(conn, set_id)
-                    print(f"[Weekly Refresh] Updated prices for {s['name']} ({set_id}).")
+                        _sync_set_core(conn, set_id, lang)
+                    print(f"[Weekly Refresh] Updated prices for {s['name']} ({set_id}) [{lang}].")
                     time.sleep(2)
                 except Exception as e:
                     print(f"[Weekly Refresh] Error updating {s['name']}: {e}")
@@ -427,14 +430,16 @@ def serve_binder_page():
 @login_required
 def api_list_sets():
     user_id = session["user_id"]
+    lang = request.args.get("lang", "en")
+    
     with db.get_conn() as conn:
-        rows = db.get_all_sets(conn, user_id)
+        rows = db.get_all_sets(conn, user_id, lang)
         if rows:
             start_background_preload()
             return jsonify([dict(r) for r in rows])
 
     try:
-        raw_sets = pokemon_api.fetch_sets()
+        raw_sets = pokemon_api.fetch_sets(lang)
     except pokemon_api.PokemonAPIError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
@@ -443,7 +448,7 @@ def api_list_sets():
     with db.get_conn() as conn:
         for raw in raw_sets:
             db.upsert_set(conn, pokemon_api.normalize_set(raw))
-        rows = db.get_all_sets(conn, user_id)
+        rows = db.get_all_sets(conn, user_id, lang)
         start_background_preload()
         return jsonify([dict(r) for r in rows])
 
@@ -451,11 +456,13 @@ def api_list_sets():
 @login_required
 def api_refresh_sets():
     rl_key = f"sync_api_{_rate_limit_key()}"
+    lang = request.args.get("lang", "en")
+    
     if _is_rate_limited(rl_key, max_attempts=3, window=60):
         return jsonify({"error": "Too many refresh attempts. Please wait."}), 429
 
     try:
-        raw_sets = pokemon_api.fetch_sets()
+        raw_sets = pokemon_api.fetch_sets(lang)
         _record_attempt(rl_key)
     except pokemon_api.PokemonAPIError as e:
         return jsonify({"error": str(e)}), 400
@@ -465,7 +472,7 @@ def api_refresh_sets():
     with db.get_conn() as conn:
         for raw in raw_sets:
             db.upsert_set(conn, pokemon_api.normalize_set(raw))
-        rows = db.get_all_sets(conn, session["user_id"])
+        rows = db.get_all_sets(conn, session["user_id"], lang)
         start_background_preload()
         return jsonify([dict(r) for r in rows])
 
@@ -475,12 +482,14 @@ def api_get_set_cards(set_id):
     user_id = session["user_id"]
     rarity = request.args.get("rarity")
     card_type = request.args.get("type")
+    
     with db.get_conn() as conn:
         set_row = db.get_set(conn, set_id)
+        lang = set_row["language"] if set_row and "language" in set_row.keys() else "en"
         cards = db.get_cards_for_set(conn, set_id, rarity, user_id, card_type)
 
         if not cards and (not set_row or not set_row["last_synced"]):
-            synced = _sync_set(conn, set_id)
+            synced = _sync_set(conn, set_id, lang)
             if isinstance(synced, tuple):
                 return synced
             cards = db.get_cards_for_set(conn, set_id, rarity, user_id, card_type)
@@ -502,7 +511,9 @@ def api_refresh_set_cards(set_id):
 
     user_id = session["user_id"]
     with db.get_conn() as conn:
-        result = _sync_set(conn, set_id)
+        set_row = db.get_set(conn, set_id)
+        lang = set_row["language"] if set_row and "language" in set_row.keys() else "en"
+        result = _sync_set(conn, set_id, lang)
         _record_attempt(rl_key)
         if isinstance(result, tuple):
             return result
@@ -515,9 +526,9 @@ def api_refresh_set_cards(set_id):
             "available_rarities": rarities,
         })
 
-def _sync_set(conn, set_id: str):
+def _sync_set(conn, set_id: str, lang='en'):
     try:
-        _sync_set_core(conn, set_id)
+        _sync_set_core(conn, set_id, lang)
     except pokemon_api.PokemonAPIError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
@@ -532,6 +543,7 @@ def api_search_cards():
     rarity = request.args.get("rarity")
     pokedex_number = request.args.get("pokedex_number")
     card_type = request.args.get("type")
+    lang = request.args.get("lang", "en")
 
     if pokedex_number and pokedex_number.strip():
         try:
@@ -542,7 +554,7 @@ def api_search_cards():
         pokedex_number = None
 
     with db.get_conn() as conn:
-        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type)
+        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type, lang)
 
     if not cards:
         if pokedex_number:
@@ -556,14 +568,14 @@ def api_search_cards():
                             if s_id and not db.get_set(conn, s_id):
                                 db.upsert_set(conn, pokemon_api.normalize_set(raw.get("set", {})))
                             db.upsert_card(conn, pokemon_api.normalize_card(raw, s_id))
-                        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type)
+                        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type, lang)
             except Exception as e:
                 print(f"Dex fallback error: {e}")
 
         elif name and len(name) >= 2:
-            print(f"[Search] Local database empty for '{name}'. Downloading live data...")
+            print(f"[Search] Local database empty for '{name}' ({lang}). Downloading live data...")
             try:
-                raw_cards = pokemon_api.fetch_cards_by_name(name)
+                raw_cards = pokemon_api.fetch_cards_by_name(name, lang)
                 if raw_cards:
                     with db.get_conn() as conn:
                         for raw in raw_cards:
@@ -571,7 +583,7 @@ def api_search_cards():
                             if s_id and not db.get_set(conn, s_id):
                                 db.upsert_set(conn, pokemon_api.normalize_set(raw.get("set", {})))
                             db.upsert_card(conn, pokemon_api.normalize_card(raw, s_id))
-                        cards = db.search_cards_global(conn, name, rarity, pokedex_number, user_id, card_type)
+                        cards = db.search_cards_global(conn, name, rarity, pokedex_number, user_id, card_type, lang)
             except Exception as e:
                 print(f"Name fallback error: {e}")
 
