@@ -6,4 +6,8 @@ services:
     container_name: pokyudex-web
     ports:
       - "5000:5000"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
     restart: unless-stopped
