@@ -275,12 +275,10 @@ def _preload_all_sets_worker():
     print("[Background Sync] Starting background card preload...")
     try:
         with db.get_conn() as conn:
-            # Peschiamo direttamente tutti i set che necessitano di sync senza filtri di utente
             sets = conn.execute("SELECT * FROM sets WHERE last_synced IS NULL").fetchall()
 
         for s in sets:
             set_id = s["id"]
-            # Convertiamo sqlite3.Row in dict per usare .get in sicurezza
             lang = dict(s).get("language", "en")
             print(f"[Background Sync] Downloading cards for: {s['name']} ({set_id}) [{lang}]...")
             try:
@@ -553,37 +551,53 @@ def api_search_cards():
     else:
         pokedex_number = None
 
+    # Autodettaglio Pokédex per ricerche testuali (es. "Pikachu" -> #25)
+    if name and not pokedex_number:
+        with db.get_conn() as conn:
+            row = conn.execute(
+                "SELECT national_dex FROM cards WHERE name LIKE ? AND national_dex IS NOT NULL LIMIT 1",
+                (f"%{name}%",)
+            ).fetchone()
+            if row and row["national_dex"]:
+                pokedex_number = row["national_dex"]
+
     with db.get_conn() as conn:
         cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type, lang)
 
     if not cards:
         if pokedex_number:
-            print(f"[Search] Local database empty for Dex #{pokedex_number}. Downloading live data...")
+            print(f"[Search] Local database empty for Dex #{pokedex_number} ({lang}). Downloading live data...")
             try:
-                raw_cards = pokemon_api.fetch_cards_by_pokedex(pokedex_number)
-                if raw_cards:
-                    with db.get_conn() as conn:
-                        for raw in raw_cards:
-                            s_id = raw.get("set", {}).get("id")
-                            if s_id and not db.get_set(conn, s_id):
-                                db.upsert_set(conn, pokemon_api.normalize_set(raw.get("set", {})))
-                            db.upsert_card(conn, pokemon_api.normalize_card(raw, s_id))
-                        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type, lang)
+                search_langs = ['en', 'ja', 'zh-cn'] if lang == 'all' else [lang]
+                for l in search_langs:
+                    raw_cards = pokemon_api.fetch_cards_by_pokedex(pokedex_number, l)
+                    if raw_cards:
+                        with db.get_conn() as conn:
+                            for raw in raw_cards:
+                                s_id = raw.get("set", {}).get("id")
+                                if s_id and not db.get_set(conn, s_id):
+                                    db.upsert_set(conn, pokemon_api.normalize_set(raw.get("set", {})))
+                                db.upsert_card(conn, pokemon_api.normalize_card(raw, s_id))
+                with db.get_conn() as conn:
+                    cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type, lang)
             except Exception as e:
                 print(f"Dex fallback error: {e}")
 
         elif name and len(name) >= 2:
             print(f"[Search] Local database empty for '{name}' ({lang}). Downloading live data...")
             try:
-                raw_cards = pokemon_api.fetch_cards_by_name(name, lang)
-                if raw_cards:
-                    with db.get_conn() as conn:
-                        for raw in raw_cards:
-                            s_id = raw.get("set", {}).get("id")
-                            if s_id and not db.get_set(conn, s_id):
-                                db.upsert_set(conn, pokemon_api.normalize_set(raw.get("set", {})))
-                            db.upsert_card(conn, pokemon_api.normalize_card(raw, s_id))
-                        cards = db.search_cards_global(conn, name, rarity, pokedex_number, user_id, card_type, lang)
+                search_langs = ['en', 'ja', 'zh-cn'] if lang == 'all' else [lang]
+                for l in search_langs:
+                    raw_cards = pokemon_api.fetch_cards_by_name(name, l)
+                    if raw_cards:
+                        with db.get_conn() as conn:
+                            for raw in raw_cards:
+                                s_id = raw.get("set", {}).get("id")
+                                if s_id and not db.get_set(conn, s_id):
+                                    db.upsert_set(conn, pokemon_api.normalize_set(raw.get("set", {})))
+                                db.upsert_card(conn, pokemon_api.normalize_card(raw, s_id))
+                with db.get_conn() as conn:
+                    cards = db.search_cards_global(conn, name, rarity, pokedex_number, user_id, card_type, lang)
             except Exception as e:
                 print(f"Name fallback error: {e}")
 

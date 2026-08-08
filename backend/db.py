@@ -341,6 +341,14 @@ def mark_set_synced(conn, set_id: str, timestamp: str):
 
 
 def get_all_sets(conn, user_id=None, lang='en'):
+    if lang == 'all':
+        return conn.execute(
+            """SELECT *,
+               (SELECT 1 FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS is_favorite,
+               (SELECT sort_order FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS fav_sort_order
+               FROM sets ORDER BY release_date DESC""",
+            (user_id, user_id),
+        ).fetchall()
     return conn.execute(
         """SELECT *,
            (SELECT 1 FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS is_favorite,
@@ -400,18 +408,27 @@ def search_cards_global(conn, name=None, rarity=None, pokedex_number=None, user_
                (SELECT 1 FROM wishlist WHERE card_id = cards.id AND user_id = ?) AS is_wished
         FROM cards
         JOIN sets ON cards.set_id = sets.id
-        WHERE cards.language = ?
+        WHERE 1=1
     """
-    params = [user_id, user_id, lang]
-    if name:
+    params = [user_id, user_id]
+    if lang and lang != 'all':
+        query += " AND cards.language = ?"
+        params.append(lang)
+
+    if name and pokedex_number:
+        query += " AND (cards.name LIKE ? OR cards.national_dex = ?)"
+        params.append(f"%{name}%")
+        params.append(pokedex_number)
+    elif name:
         query += " AND cards.name LIKE ?"
         params.append(f"%{name}%")
+    elif pokedex_number:
+        query += " AND cards.national_dex = ?"
+        params.append(pokedex_number)
+
     if rarity:
         query += " AND cards.rarity = ?"
         params.append(rarity)
-    if pokedex_number:
-        query += " AND cards.national_dex = ?"
-        params.append(pokedex_number)
     if card_type:
         query += " AND (',' || cards.types || ',') LIKE ?"
         params.append(f"%,{card_type},%")

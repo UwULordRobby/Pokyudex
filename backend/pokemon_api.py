@@ -170,7 +170,34 @@ def _fetch_cards_tcgdex(set_id: str, lang='en') -> list[dict]:
 
 # ---------- Emergency Live Search ----------
 
-def fetch_cards_by_pokedex(pokedex_number: int) -> list[dict]:
+def fetch_cards_by_pokedex(pokedex_number: int, lang='en') -> list[dict]:
+    if lang != 'en':
+        try:
+            resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/dex-ids/{pokedex_number}", timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            cards = data.get("cards", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+            out = []
+            for c in cards:
+                img_base = c.get("image")
+                out.append({
+                    "id": c.get("id"),
+                    "name": c.get("name", "Unknown card"),
+                    "number": c.get("localId"),
+                    "nationalPokedexNumbers": [pokedex_number],
+                    "images": {
+                        "small": f"{img_base}/low.png" if img_base else None,
+                        "large": f"{img_base}/high.png" if img_base else None,
+                    },
+                    "set": {
+                        "id": c.get("set", {}).get("id") if isinstance(c.get("set"), dict) else None
+                    },
+                    "language": lang
+                })
+            return out
+        except:
+            return []
+
     try:
         params = {"q": f"nationalPokedexNumbers:{pokedex_number}"}
         resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=30)

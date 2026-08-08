@@ -81,11 +81,12 @@
           <div class="chip" id="tab-cards-btn">Global Card Search</div>
         </div>
         
-        <!-- SELETTORE DELLA LINGUA CORRETTO -->
+        <!-- SELETTORE DELLA LINGUA (Incluso pulsante Globale "All") -->
         <div class="lang-selector" style="display:flex; gap:8px;">
           <div class="chip" onclick="changeLang('en', this)">🇬🇧 English</div>
           <div class="chip" onclick="changeLang('ja', this)">🇯🇵 日本語</div>
           <div class="chip" onclick="changeLang('zh-cn', this)">🇨🇳 中文</div>
+          <div class="chip" onclick="changeLang('all', this)">🌍 All</div>
         </div>
     </div>
 
@@ -211,7 +212,7 @@
       }
 
       favSection.style.display = 'none';
-      let matchedSets = allSets.filter(s => s.name.toLowerCase().includes(query));
+      let matchedSets = allSets.filter(s => s.name.toLowerCase().includes(query) || (s.id && s.id.toLowerCase().includes(query)));
       
       try {
           if (matchedSets.length === 0) container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Searching deep...</div>';
@@ -254,7 +255,7 @@
           <div class="drag-handle" title="Drag to reorder">⠿</div>
           ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
           <div class="set-name">${escapeHtml(s.name)}</div>
-          <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+          <div class="set-meta">${escapeHtml(s.id ? '[' + s.id.toUpperCase() + '] ' : '')}${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
         `;
 
         tile.addEventListener('dragstart', (e) => {
@@ -365,7 +366,7 @@
             <button class="collect-btn ${s.is_favorite ? 'owned' : ''}" style="top: 8px; right: 8px; left: auto; font-size:14px;" onclick="event.stopPropagation(); toggleFavoriteSet('${s.id}', this)">★</button>
             ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
             <div class="set-name">${escapeHtml(s.name)}</div>
-            <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+            <div class="set-meta">${escapeHtml(s.id ? '[' + s.id.toUpperCase() + '] ' : '')}${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
           `;
           grid.appendChild(tile);
         });
@@ -440,7 +441,6 @@
 
       btn.addEventListener('click', async () => {
         try {
-          // Passiamo correttamente la lingua del selettore anche al Resync All
           await api(`/api/admin/resync-all?lang=${currentLang}`, { method: 'POST' });
           setButtonState({ running: true, total: 0, done: 0 });
           polling = setInterval(pollStatus, 2000);
