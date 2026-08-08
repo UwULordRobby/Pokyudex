@@ -275,21 +275,21 @@ def _preload_all_sets_worker():
     print("[Background Sync] Starting background card preload...")
     try:
         with db.get_conn() as conn:
-            sets = db.get_all_sets(conn)
+            # Peschiamo direttamente tutti i set che necessitano di sync senza filtri di utente
+            sets = conn.execute("SELECT * FROM sets WHERE last_synced IS NULL").fetchall()
 
         for s in sets:
             set_id = s["id"]
-            lang = s.get("language", "en")
-            with db.get_conn() as conn:
-                set_row = db.get_set(conn, set_id)
-                if set_row and not set_row["last_synced"]:
-                    print(f"[Background Sync] Downloading cards for: {s['name']} ({set_id}) [{lang}]...")
-                    try:
-                        _sync_set_core(conn, set_id, lang)
-                        time.sleep(2)
-                    except Exception as e:
-                        print(f"[Background Sync] Error downloading {s['name']}: {e}")
-                        time.sleep(5)
+            # Convertiamo sqlite3.Row in dict per usare .get in sicurezza
+            lang = dict(s).get("language", "en")
+            print(f"[Background Sync] Downloading cards for: {s['name']} ({set_id}) [{lang}]...")
+            try:
+                with db.get_conn() as conn:
+                    _sync_set_core(conn, set_id, lang)
+                time.sleep(2)
+            except Exception as e:
+                print(f"[Background Sync] Error downloading {s['name']}: {e}")
+                time.sleep(5)
     except Exception as e:
         print(f"[Background Sync] Error in preload thread: {e}")
     finally:
@@ -309,18 +309,17 @@ _force_resync_lock = threading.Lock()
 _force_resync_running = False
 _force_resync_status = {"running": False, "total": 0, "done": 0, "current_set": None}
 
-def _force_resync_all_worker():
+def _force_resync_all_worker(lang):
     global _force_resync_running
-    print("[Admin Resync] Avvio resync FORZATO di tutti i set...")
+    print(f"[Admin Resync] Avvio resync FORZATO di tutti i set per lingua: {lang}...")
     try:
         with db.get_conn() as conn:
-            sets = db.get_all_sets(conn)
+            sets = db.get_all_sets(conn, user_id=None, lang=lang)
         _force_resync_status["total"] = len(sets)
         _force_resync_status["done"] = 0
 
         for s in sets:
             set_id = s["id"]
-            lang = s.get("language", "en")
             _force_resync_status["current_set"] = s["name"]
             try:
                 with db.get_conn() as conn:
@@ -340,20 +339,21 @@ def _force_resync_all_worker():
         _force_resync_status["current_set"] = None
     print("[Admin Resync] Completato!")
 
-def start_force_resync_all() -> bool:
+def start_force_resync_all(lang) -> bool:
     global _force_resync_running
     with _force_resync_lock:
         if _force_resync_running:
             return False
         _force_resync_running = True
     _force_resync_status["running"] = True
-    threading.Thread(target=_force_resync_all_worker, daemon=True).start()
+    threading.Thread(target=_force_resync_all_worker, args=(lang,), daemon=True).start()
     return True
 
 @app.route("/api/admin/resync-all", methods=["POST"])
 @admin_required
 def api_admin_resync_all():
-    if not start_force_resync_all():
+    lang = request.args.get("lang", "en")
+    if not start_force_resync_all(lang):
         return jsonify({"error": "A resync is already in progress"}), 409
     return jsonify({"success": True})
 
@@ -380,7 +380,7 @@ def _weekly_refresh_worker():
 
             for s in stale_sets:
                 set_id = s["id"]
-                lang = s.get("language", "en")
+                lang = dict(s).get("language", "en")
                 try:
                     with db.get_conn() as conn:
                         _sync_set_core(conn, set_id, lang)

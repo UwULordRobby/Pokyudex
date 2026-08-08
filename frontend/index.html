@@ -81,11 +81,11 @@
           <div class="chip" id="tab-cards-btn">Global Card Search</div>
         </div>
         
-        <!-- SELETTORE DELLA LINGUA -->
+        <!-- SELETTORE DELLA LINGUA CORRETTO -->
         <div class="lang-selector" style="display:flex; gap:8px;">
           <div class="chip" onclick="changeLang('en', this)">🇬🇧 English</div>
           <div class="chip" onclick="changeLang('ja', this)">🇯🇵 日本語</div>
-          <div class="chip" onclick="changeLang('zh-tw', this)">🇹🇼 中文</div>
+          <div class="chip" onclick="changeLang('zh-cn', this)">🇨🇳 中文</div>
         </div>
     </div>
 
@@ -440,7 +440,8 @@
 
       btn.addEventListener('click', async () => {
         try {
-          await api('/api/admin/resync-all', { method: 'POST' });
+          // Passiamo correttamente la lingua del selettore anche al Resync All
+          await api(`/api/admin/resync-all?lang=${currentLang}`, { method: 'POST' });
           setButtonState({ running: true, total: 0, done: 0 });
           polling = setInterval(pollStatus, 2000);
         } catch (err) {
