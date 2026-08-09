@@ -18,9 +18,7 @@ CREATE TABLE IF NOT EXISTS sets (
     logo_url TEXT,
     symbol_url TEXT,
     total_cards INTEGER,
-    last_synced TEXT,
-    language TEXT DEFAULT 'en',
-    tcgdex_order INTEGER DEFAULT 0
+    last_synced TEXT
 );
 
 CREATE TABLE IF NOT EXISTS cards (
@@ -39,7 +37,6 @@ CREATE TABLE IF NOT EXISTS cards (
     last_updated TEXT,
     national_dex INTEGER,
     types TEXT,
-    language TEXT DEFAULT 'en',
     FOREIGN KEY (set_id) REFERENCES sets (id)
 );
 
@@ -149,6 +146,7 @@ def _column_exists(conn, table: str, column: str) -> bool:
 
 
 def _migrate_to_multiuser(conn):
+    """Upgrades a database created BEFORE the multi-user system to the new."""
     for table, id_col in (("collection", "card_id"), ("wishlist", "card_id"), ("favorite_sets", "set_id")):
         if _table_exists(conn, table) and not _column_exists(conn, table, "user_id"):
             legacy_name = f"{table}_legacy"
@@ -213,19 +211,6 @@ def init_db():
 
         if _table_exists(conn, "wishlist_board_cards") and not _column_exists(conn, "wishlist_board_cards", "sort_order"):
             conn.execute("ALTER TABLE wishlist_board_cards ADD COLUMN sort_order INTEGER DEFAULT 0")
-            
-        try:
-            conn.execute("ALTER TABLE sets ADD COLUMN language TEXT DEFAULT 'en'")
-        except sqlite3.OperationalError:
-            pass
-
-        try:
-            conn.execute("ALTER TABLE cards ADD COLUMN language TEXT DEFAULT 'en'")
-        except sqlite3.OperationalError:
-            pass
-
-        if not _column_exists(conn, "sets", "tcgdex_order"):
-            conn.execute("ALTER TABLE sets ADD COLUMN tcgdex_order INTEGER DEFAULT 0")
 
         _migrate_to_multiuser(conn)
 
@@ -297,8 +282,8 @@ def claim_legacy_data(conn, user_id: int):
 def upsert_set(conn, set_data: dict):
     conn.execute(
         """
-        INSERT INTO sets (id, name, series, release_date, logo_url, symbol_url, total_cards, last_synced, language, tcgdex_order)
-        VALUES (:id, :name, :series, :release_date, :logo_url, :symbol_url, :total_cards, :last_synced, :language, :tcgdex_order)
+        INSERT INTO sets (id, name, series, release_date, logo_url, symbol_url, total_cards, last_synced)
+        VALUES (:id, :name, :series, :release_date, :logo_url, :symbol_url, :total_cards, :last_synced)
         ON CONFLICT(id) DO UPDATE SET
             name=excluded.name,
             series=excluded.series,
@@ -306,9 +291,7 @@ def upsert_set(conn, set_data: dict):
             logo_url=excluded.logo_url,
             symbol_url=excluded.symbol_url,
             total_cards=excluded.total_cards,
-            last_synced=COALESCE(excluded.last_synced, sets.last_synced),
-            language=COALESCE(excluded.language, sets.language),
-            tcgdex_order=COALESCE(excluded.tcgdex_order, sets.tcgdex_order)
+            last_synced=COALESCE(excluded.last_synced, sets.last_synced)
         """,
         set_data,
     )
@@ -318,9 +301,9 @@ def upsert_card(conn, card_data: dict):
     conn.execute(
         """
         INSERT INTO cards (id, set_id, name, card_number, rarity, image_small, image_large,
-                            price_market, price_low, price_mid, price_high, currency, last_updated, national_dex, types, language)
+                            price_market, price_low, price_mid, price_high, currency, last_updated, national_dex, types)
         VALUES (:id, :set_id, :name, :card_number, :rarity, :image_small, :image_large,
-                :price_market, :price_low, :price_mid, :price_high, :currency, :last_updated, :national_dex, :types, :language)
+                :price_market, :price_low, :price_mid, :price_high, :currency, :last_updated, :national_dex, :types)
         ON CONFLICT(id) DO UPDATE SET
             name=excluded.name,
             card_number=excluded.card_number,
@@ -334,8 +317,7 @@ def upsert_card(conn, card_data: dict):
             currency=COALESCE(excluded.currency, cards.currency),
             last_updated=COALESCE(excluded.last_updated, cards.last_updated),
             national_dex=COALESCE(excluded.national_dex, cards.national_dex),
-            types=COALESCE(excluded.types, cards.types),
-            language=COALESCE(excluded.language, cards.language)
+            types=COALESCE(excluded.types, cards.types)
         """,
         card_data,
     )
@@ -345,21 +327,13 @@ def mark_set_synced(conn, set_id: str, timestamp: str):
     conn.execute("UPDATE sets SET last_synced = ? WHERE id = ?", (timestamp, set_id))
 
 
-def get_all_sets(conn, user_id=None, lang='en'):
-    if lang == 'all':
-        return conn.execute(
-            """SELECT *,
-               (SELECT 1 FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS is_favorite,
-               (SELECT sort_order FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS fav_sort_order
-               FROM sets ORDER BY release_date DESC, tcgdex_order DESC, rowid DESC""",
-            (user_id, user_id),
-        ).fetchall()
+def get_all_sets(conn, user_id=None):
     return conn.execute(
         """SELECT *,
            (SELECT 1 FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS is_favorite,
            (SELECT sort_order FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS fav_sort_order
-           FROM sets WHERE language = ? ORDER BY release_date DESC, tcgdex_order DESC, rowid DESC""",
-        (user_id, user_id, lang),
+           FROM sets ORDER BY release_date DESC""",
+        (user_id, user_id),
     ).fetchall()
 
 
@@ -406,9 +380,9 @@ def get_rarities_for_set(conn, set_id: str):
     return [r["rarity"] for r in rows]
 
 
-def search_cards_global(conn, name=None, rarity=None, pokedex_number=None, user_id=None, card_type=None, lang='en'):
+def search_cards_global(conn, name=None, rarity=None, pokedex_number=None, user_id=None, card_type=None):
     query = """
-        SELECT cards.*, sets.name AS set_name, sets.release_date, sets.tcgdex_order,
+        SELECT cards.*, sets.name AS set_name, sets.release_date,
                (SELECT 1 FROM collection WHERE card_id = cards.id AND user_id = ?) AS is_owned,
                (SELECT 1 FROM wishlist WHERE card_id = cards.id AND user_id = ?) AS is_wished
         FROM cards
@@ -416,29 +390,20 @@ def search_cards_global(conn, name=None, rarity=None, pokedex_number=None, user_
         WHERE 1=1
     """
     params = [user_id, user_id]
-    if lang and lang != 'all':
-        query += " AND cards.language = ?"
-        params.append(lang)
-
-    if name and pokedex_number:
-        query += " AND (cards.name LIKE ? OR cards.national_dex = ?)"
-        params.append(f"%{name}%")
-        params.append(pokedex_number)
-    elif name:
+    if name:
         query += " AND cards.name LIKE ?"
         params.append(f"%{name}%")
-    elif pokedex_number:
-        query += " AND cards.national_dex = ?"
-        params.append(pokedex_number)
-
     if rarity:
         query += " AND cards.rarity = ?"
         params.append(rarity)
+    if pokedex_number:
+        query += " AND cards.national_dex = ?"
+        params.append(pokedex_number)
     if card_type:
         query += " AND (',' || cards.types || ',') LIKE ?"
         params.append(f"%,{card_type},%")
 
-    query += " ORDER BY sets.release_date DESC, sets.tcgdex_order DESC, sets.rowid DESC, cards.price_market IS NULL, cards.price_market DESC"
+    query += " ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC"
     return conn.execute(query, params).fetchall()
 
 
@@ -496,7 +461,7 @@ def get_user_collection(conn, user_id: int):
            JOIN cards ON collection.card_id = cards.id
            JOIN sets ON cards.set_id = sets.id
            WHERE collection.user_id = ?
-           ORDER BY sets.release_date DESC, sets.tcgdex_order DESC, sets.rowid DESC, cards.price_market IS NULL, cards.price_market DESC""",
+           ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC""",
         (user_id,),
     ).fetchall()
 
@@ -508,7 +473,7 @@ def get_user_wishlist(conn, user_id: int):
            JOIN cards ON wishlist.card_id = cards.id
            JOIN sets ON cards.set_id = sets.id
            WHERE wishlist.user_id = ?
-           ORDER BY sets.release_date DESC, sets.tcgdex_order DESC, sets.rowid DESC, cards.price_market IS NULL, cards.price_market DESC""",
+           ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC""",
         (user_id,),
     ).fetchall()
 
@@ -616,7 +581,7 @@ def get_uncategorized_wishlist(conn, user_id: int):
            JOIN cards ON wishlist.card_id = cards.id
            JOIN sets ON cards.set_id = sets.id
            WHERE wishlist.user_id = ?
-           ORDER BY sets.release_date DESC, sets.tcgdex_order DESC, sets.rowid DESC, cards.price_market IS NULL, cards.price_market DESC""",
+           ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC""",
         (user_id,),
     ).fetchall()
 
@@ -695,7 +660,7 @@ def get_wishlist_board_cards(conn, board_id: int):
            JOIN cards ON wbc.card_id = cards.id
            JOIN sets ON cards.set_id = sets.id
            WHERE wbc.board_id = ?
-           ORDER BY wbc.sort_order ASC, sets.release_date DESC, sets.tcgdex_order DESC, sets.rowid DESC""",
+           ORDER BY wbc.sort_order ASC, sets.release_date DESC""",
         (board_id,)
     ).fetchall()
 

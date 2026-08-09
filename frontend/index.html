@@ -37,10 +37,6 @@
       text-transform: uppercase;
       letter-spacing: 1.5px;
     }
-    .lang-selector .chip {
-      padding: 6px 14px;
-      font-weight: bold;
-    }
   </style>
 </head>
 <body>
@@ -75,17 +71,9 @@
     <div class="eyebrow">Pokyudex &mdash; Search Panel</div>
     <h1>What would you like to search for today?</h1>
     
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        <div class="filters" style="position: static; background: none; backdrop-filter: none; border-bottom: none; padding: 10px 0 20px;">
-          <div class="chip active" id="tab-sets-btn">Browse Sets</div>
-          <div class="chip" id="tab-cards-btn">Global Card Search</div>
-        </div>
-        
-        <div class="lang-selector" style="display:flex; gap:8px;">
-          <div class="chip" onclick="changeLang('en', this)">🇬🇧 English</div>
-          <div class="chip" onclick="changeLang('ja', this)">🇯🇵 日本語</div>
-          <div class="chip" onclick="changeLang('all', this)">🌍 All</div>
-        </div>
+    <div class="filters" style="position: static; background: none; backdrop-filter: none; border-bottom: none; padding: 10px 0 20px;">
+      <div class="chip active" id="tab-sets-btn">Browse Sets</div>
+      <div class="chip" id="tab-cards-btn">Global Card Search</div>
     </div>
 
     <div id="section-sets">
@@ -102,6 +90,7 @@
     </div>
 
     <div id="section-cards" style="display: none;">
+      <!-- Ripristinate le larghezze fisse inline per Desktop -->
       <div class="mobile-search-row" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 10px;">
         <input type="text" class="search-bar" id="card-name-input" placeholder="Card name (e.g. Charizard)..." style="margin-top: 0; flex: 1; min-width: 220px;" />
         
@@ -143,36 +132,6 @@
     let globalSearchResults = []; 
     let raritiesLoaded = false;
     let typesLoaded = false;
-    let currentLang = localStorage.getItem('pokyudex_lang') || 'en';
-
-    if (currentLang === 'zh-cn') {
-      currentLang = 'en';
-      localStorage.setItem('pokyudex_lang', 'en');
-    }
-
-    document.addEventListener("DOMContentLoaded", () => {
-        const btns = document.querySelectorAll('.lang-selector .chip');
-        btns.forEach(b => {
-            if(b.getAttribute('onclick').includes(currentLang)) {
-                btns.forEach(x => x.classList.remove('active'));
-                b.classList.add('active');
-            }
-        });
-    });
-
-    function changeLang(lang, btnElement) {
-        currentLang = lang;
-        localStorage.setItem('pokyudex_lang', lang);
-        
-        const btns = document.querySelectorAll('.lang-selector .chip');
-        btns.forEach(b => b.classList.remove('active'));
-        btnElement.classList.add('active');
-        
-        loadSets();
-        if (sectionCards.style.display === 'block') {
-            searchCardsGlobal();
-        }
-    }
 
     const tabSetsBtn = document.getElementById('tab-sets-btn');
     const tabCardsBtn = document.getElementById('tab-cards-btn');
@@ -214,11 +173,11 @@
       }
 
       favSection.style.display = 'none';
-      let matchedSets = allSets.filter(s => s.name.toLowerCase().includes(query) || (s.id && s.id.toLowerCase().includes(query)));
+      let matchedSets = allSets.filter(s => s.name.toLowerCase().includes(query));
       
       try {
           if (matchedSets.length === 0) container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Searching deep...</div>';
-          const cards = await api(`/api/cards/search?name=${encodeURIComponent(query)}&lang=${currentLang}`);
+          const cards = await api(`/api/cards/search?name=${encodeURIComponent(query)}`);
           const setIdsFromCards = new Set(cards.map(c => c.set_id));
           const extraSets = allSets.filter(s => setIdsFromCards.has(s.id) && !matchedSets.includes(s));
           matchedSets = [...matchedSets, ...extraSets];
@@ -257,8 +216,7 @@
           <div class="drag-handle" title="Drag to reorder">⠿</div>
           ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
           <div class="set-name">${escapeHtml(s.name)}</div>
-          <div class="set-meta" style="color: var(--teal); font-weight: bold; margin-bottom: 2px;">${escapeHtml(s.id ? '[' + s.id.toUpperCase() + '] ' : '')}</div>
-          <div class="set-meta">${escapeHtml(s.series || 'Other Era')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+          <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
         `;
 
         tile.addEventListener('dragstart', (e) => {
@@ -323,7 +281,7 @@
 
     function renderSetsGrid(sets, container) {
       if (!sets.length) {
-        container.innerHTML = '<div class="state-msg">No sets found for this language. Click "Update Sets" to fetch them.</div>';
+        container.innerHTML = '<div class="state-msg">No sets found.</div>';
         return;
       }
       
@@ -331,15 +289,8 @@
       const groups = {};
       const eraOrder = [];
 
-      sets.sort((a, b) => {
-        if (a.release_date && b.release_date && a.release_date !== b.release_date) {
-            return b.release_date.localeCompare(a.release_date);
-        }
-        return (b.tcgdex_order || 0) - (a.tcgdex_order || 0);
-      });
-
       sets.forEach((s) => {
-        let era = s.series || 'Other Era';
+        let era = s.series || 'Other';
         if (era.toLowerCase() === 'xy') {
           era = 'XY / Mega Evolution';
         }
@@ -376,8 +327,7 @@
             <button class="collect-btn ${s.is_favorite ? 'owned' : ''}" style="top: 8px; right: 8px; left: auto; font-size:14px;" onclick="event.stopPropagation(); toggleFavoriteSet('${s.id}', this)">★</button>
             ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
             <div class="set-name">${escapeHtml(s.name)}</div>
-            <div class="set-meta" style="color: var(--teal); font-weight: bold; margin-bottom: 2px;">${escapeHtml(s.id ? '[' + s.id.toUpperCase() + '] ' : '')}</div>
-            <div class="set-meta">${escapeHtml(s.series || 'Other Era')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+            <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
           `;
           grid.appendChild(tile);
         });
@@ -388,11 +338,9 @@
 
     async function loadSets() {
       const container = document.getElementById('sets-container');
-      container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Loading sets...</div>';
       try {
-        const data = await api(`/api/sets?lang=${currentLang}`);
-        // FILTRO: Manteniamo solo i set che contengono effettivamente delle carte
-        allSets = data.filter(s => s.total_cards > 0);
+        const data = await api('/api/sets');
+        allSets = data;
         renderSetsPage();
       } catch (err) {
         container.innerHTML = `<div class="state-msg error">Error loading: ${err.message}</div>`;
@@ -413,7 +361,7 @@
           fetchBtn.disabled = true;
           fetchBtn.textContent = '📥 Fetching...';
           try {
-            await api(`/api/sets/refresh?lang=${currentLang}`, { method: 'POST' });
+            await api('/api/sets/refresh', { method: 'POST' });
             window.location.reload();
           } catch (err) {
             alert('Error: ' + err.message);
@@ -453,7 +401,7 @@
 
       btn.addEventListener('click', async () => {
         try {
-          await api(`/api/admin/resync-all?lang=${currentLang}`, { method: 'POST' });
+          await api('/api/admin/resync-all', { method: 'POST' });
           setButtonState({ running: true, total: 0, done: 0 });
           polling = setInterval(pollStatus, 2000);
         } catch (err) {
@@ -590,7 +538,7 @@
       container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Searching...</div>';
 
       try {
-        const url = `/api/cards/search?name=${encodeURIComponent(name)}&rarity=${encodeURIComponent(rarity)}&type=${encodeURIComponent(type)}&lang=${currentLang}`;
+        const url = `/api/cards/search?name=${encodeURIComponent(name)}&rarity=${encodeURIComponent(rarity)}&type=${encodeURIComponent(type)}`;
         globalSearchResults = await api(url);
         
         if (!globalSearchResults.length) {
