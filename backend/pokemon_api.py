@@ -138,7 +138,7 @@ def fetch_cards_for_set(set_id: str, lang='en') -> list[dict]:
 
 
 def _fetch_cards_tcgdex(set_id: str, lang='en') -> list[dict]:
-    """Fallback fetcher using TCGdex API GraphQL per ottenere Pokédex, Tipi e Rarità."""
+    """Fallback fetcher using TCGdex API GraphQL per ottenere Pokédex, Tipi e Rarità con paracadute REST."""
     orig_set_id = set_id
     if lang != 'en' and set_id.endswith(f"-{lang}"):
         orig_set_id = set_id[:-(len(lang)+1)]
@@ -163,13 +163,17 @@ def _fetch_cards_tcgdex(set_id: str, lang='en') -> list[dict]:
             "https://api.tcgdex.net/v2/graphql",
             json={"query": query, "variables": {"id": orig_set_id}},
             headers={"Accept-Language": lang},
-            timeout=60
+            timeout=30
         )
         resp.raise_for_status()
         data = resp.json()
+        
+        if "errors" in data:
+            raise PokemonAPIError(f"GraphQL Errors: {data['errors']}")
+            
         set_data = data.get("data", {}).get("set")
         if not set_data:
-            return []
+            raise PokemonAPIError("GraphQL returned empty set data")
         
         cards = set_data.get("cards", [])
         out = []
@@ -177,7 +181,6 @@ def _fetch_cards_tcgdex(set_id: str, lang='en') -> list[dict]:
             img_base = c.get("image")
             orig_c_id = c.get("id")
             
-            # GraphQL restituisce il dexId come numero o array di numeri
             dex_id = c.get("dexId")
             if isinstance(dex_id, list) and len(dex_id) > 0:
                 dex_list = [dex_id[0]]
@@ -205,14 +208,40 @@ def _fetch_cards_tcgdex(set_id: str, lang='en') -> list[dict]:
             })
         return out
     except Exception as e:
-        raise PokemonAPIError(f"TCGdex GraphQL failed for {set_id}: {e}")
+        print(f"[API] GraphQL failed for {set_id} ({e}), falling back to REST...")
+        try:
+            # Paracadute: se GraphQL fallisce per qualsiasi motivo, usa le API classiche
+            resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/sets/{orig_set_id}", timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            cards = data.get("cards", [])
+            out = []
+            for c in cards:
+                img_base = c.get("image")
+                orig_c_id = c.get("id")
+                out.append({
+                    "id": orig_c_id if lang == 'en' else f"{orig_c_id}-{lang}",
+                    "name": c.get("name", "Unknown card"),
+                    "number": c.get("localId"),
+                    "rarity": c.get("rarity"),
+                    "types": None,
+                    "nationalPokedexNumbers": None,
+                    "images": {
+                        "small": f"{img_base}/low.png" if img_base else None,
+                        "large": f"{img_base}/high.png" if img_base else None,
+                    },
+                    "set": {"id": set_id},
+                    "language": lang
+                })
+            return out
+        except Exception as e2:
+            raise PokemonAPIError(f"Both GraphQL and REST failed for {set_id}: {e2}")
 
 
 # ---------- Emergency Live Search ----------
 
 def fetch_cards_by_pokedex(pokedex_number: int, lang='en') -> list[dict]:
     if lang != 'en':
-        # Con la query locale ora coperta da GraphQL, possiamo evitare il fetch massivo live qui
         return []
 
     try:

@@ -15,7 +15,6 @@
           <a href="binder.html" class="side-menu-link">📁 Binders</a>
           <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
           <a href="collezione.html" class="side-menu-link">★ My Collection</a>
-          <!-- VOCI MENU SOLO MOBILE -->
           <div class="mobile-only-menu-items">
             <a href="#" class="side-menu-link" onclick="if(typeof showAboutModal === 'function') showAboutModal()">👤 About</a>
             <a href="#" class="side-menu-link" style="color: var(--danger);" onclick="logoutUser()">🚪 Logout</a>
@@ -26,6 +25,7 @@
       <a href="index.html" class="brand"><span class="dot"></span> Pokyudex</a>
     </div>
     <div class="topbar-right">
+      <button class="btn" id="admin-refresh-set-btn" style="display:none;" title="Force update this set from API">🔄 Refresh Set</button>
       <button class="btn" id="about-btn" title="About the creator">👤 About</button>
       <span id="current-username" class="user-badge"></span>
       <button class="btn" onclick="logoutUser()">Logout</button>
@@ -39,7 +39,6 @@
         <h1 id="set-name">Loading...</h1>
       </div>
       
-      <!-- Ripristinate le larghezze fisse inline per Desktop -->
       <div class="mobile-search-row" style="display:flex; gap:10px; align-items:center; flex-wrap: wrap; justify-content: flex-end;">
         <input type="text" id="name-search" class="search-bar" placeholder="Search Pokémon..." style="margin-top: 0; height: 41px; padding: 0 14px; width: auto; min-width: 200px;" />
         <select id="type-select" class="search-bar" style="margin-top: 0; height: 41px; padding: 0 14px; width: auto; min-width: 160px;">
@@ -422,6 +421,26 @@
     document.getElementById('name-search').addEventListener('input', renderCards);
     document.getElementById('about-btn').addEventListener('click', showAboutModal);
 
+    function initAdminSetSync(user) {
+      const btn = document.getElementById('admin-refresh-set-btn');
+      if (!user || !user.is_admin) return;
+      btn.style.display = 'inline-flex';
+      
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = '🔄 Fetching...';
+        try {
+          const data = await api(`/api/sets/${encodeURIComponent(setId)}/refresh`, { method: 'POST' });
+          applyData(data);
+        } catch (err) {
+          alert('Error: ' + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '🔄 Refresh Set';
+        }
+      });
+    }
+
     async function toggleOwn(cardId, btn) {
       try {
         const res = await api('/api/collection/toggle', {
@@ -448,6 +467,7 @@
       if (user) { 
         await loadExchangeRate();
         loadCards(); 
+        initAdminSetSync(user);
       } 
     });
   </script>
