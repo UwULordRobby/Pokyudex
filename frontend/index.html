@@ -52,7 +52,6 @@
           <a href="binder.html" class="side-menu-link">📁 Binders</a>
           <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
           <a href="collezione.html" class="side-menu-link">★ My Collection</a>
-          <!-- VOCI MENU SOLO MOBILE -->
           <div class="mobile-only-menu-items">
             <a href="#" class="side-menu-link" onclick="if(typeof showAboutModal === 'function') showAboutModal()">👤 About</a>
             <a href="#" class="side-menu-link" style="color: var(--danger);" onclick="logoutUser()">🚪 Logout</a>
@@ -81,7 +80,6 @@
           <div class="chip" id="tab-cards-btn">Global Card Search</div>
         </div>
         
-        <!-- SELETTORE DELLA LINGUA (Incluso pulsante Globale "All") -->
         <div class="lang-selector" style="display:flex; gap:8px;">
           <div class="chip" onclick="changeLang('en', this)">🇬🇧 English</div>
           <div class="chip" onclick="changeLang('ja', this)">🇯🇵 日本語</div>
@@ -104,7 +102,6 @@
     </div>
 
     <div id="section-cards" style="display: none;">
-      <!-- Ripristinate le larghezze fisse inline per Desktop -->
       <div class="mobile-search-row" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 10px;">
         <input type="text" class="search-bar" id="card-name-input" placeholder="Card name (e.g. Charizard)..." style="margin-top: 0; flex: 1; min-width: 220px;" />
         
@@ -329,6 +326,15 @@
       const groups = {};
       const eraOrder = [];
 
+      // Ordina rigorosamente i set dal più nuovo al più vecchio usando la data
+      // Se la data manca, sfrutta il numero fornito in origine da TCGdex
+      sets.sort((a, b) => {
+        if (a.release_date && b.release_date && a.release_date !== b.release_date) {
+            return b.release_date.localeCompare(a.release_date);
+        }
+        return (b.tcgdex_order || 0) - (a.tcgdex_order || 0);
+      });
+
       sets.forEach((s) => {
         let era = s.series || 'Other Era';
         if (era.toLowerCase() === 'xy') {
@@ -443,7 +449,6 @@
 
       btn.addEventListener('click', async () => {
         try {
-          // Passiamo correttamente la lingua del selettore anche al Resync All
           await api(`/api/admin/resync-all?lang=${currentLang}`, { method: 'POST' });
           setButtonState({ running: true, total: 0, done: 0 });
           polling = setInterval(pollStatus, 2000);

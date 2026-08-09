@@ -57,14 +57,14 @@ def fetch_sets(lang='en') -> list[dict]:
 
 def _fetch_sets_tcgdex(lang='en') -> list[dict]:
     """Fallback fetcher using TCGdex API for sets, supports multiple languages."""
+    tcg_lang = 'zh-tw' if lang == 'zh-cn' else lang
     try:
-        resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/sets", timeout=30)
+        resp = requests.get(f"https://api.tcgdex.net/v2/{tcg_lang}/sets", timeout=30)
         resp.raise_for_status()
         raw_sets = resp.json()
         out = []
         for i, s in enumerate(raw_sets):
             orig_id = s.get("id")
-            # Isoliamo gli ID asiatici per non sovrascrivere quelli inglesi (es. sv7 -> sv7-ja)
             out.append({
                 "id": orig_id if lang == 'en' else f"{orig_id}-{lang}",
                 "name": s.get("name", "Unknown set"),
@@ -107,7 +107,6 @@ def fetch_cards_for_set(set_id: str, lang='en') -> list[dict]:
                     raise PokemonAPIError("Rate limit reached.")
                 
                 if resp.status_code >= 500:
-                    print(f"[API] Server Error {resp.status_code} for set {set_id}. Retrying {attempt + 1}/{max_retries}...")
                     time.sleep(2 ** attempt)
                     continue
                 
@@ -118,11 +117,9 @@ def fetch_cards_for_set(set_id: str, lang='en') -> list[dict]:
                 break
                 
             except requests.exceptions.RequestException as e:
-                print(f"[API] Network error for set {set_id}: {e}. Retrying {attempt + 1}/{max_retries}...")
                 time.sleep(2 ** attempt)
 
         if not batch_success:
-            print(f"[API] Primary API failed for set {set_id}. Trying TCGdex fallback...")
             break
 
         batch = payload.get("data", [])
@@ -142,74 +139,84 @@ def fetch_cards_for_set(set_id: str, lang='en') -> list[dict]:
 
 
 def _fetch_cards_tcgdex(set_id: str, lang='en') -> list[dict]:
-    """Fallback fetcher using TCGdex API for cards within a set."""
-    # Rimuoviamo il nostro suffisso (-ja, -zh-cn) per fare la chiamata reale al server
+    """Fallback fetcher using TCGdex API GraphQL per ottenere Pokédex, Tipi e Rarità."""
     orig_set_id = set_id
     if lang != 'en' and set_id.endswith(f"-{lang}"):
         orig_set_id = set_id[:-(len(lang)+1)]
         
+    tcg_lang = 'zh-tw' if lang == 'zh-cn' else lang
+        
+    query = """
+    query($id: ID!) {
+      set(id: $id) {
+        cards {
+          id
+          localId
+          name
+          image
+          dexId
+          rarity
+          types
+        }
+      }
+    }
+    """
     try:
-        resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/sets/{orig_set_id}", timeout=60)
+        resp = requests.post(
+            "https://api.tcgdex.net/v2/graphql",
+            json={"query": query, "variables": {"id": orig_set_id}},
+            headers={"Accept-Language": tcg_lang},
+            timeout=60
+        )
         resp.raise_for_status()
         data = resp.json()
-        cards = data.get("cards", [])
+        set_data = data.get("data", {}).get("set")
+        if not set_data:
+            return []
+        
+        cards = set_data.get("cards", [])
         out = []
         for c in cards:
             img_base = c.get("image")
             orig_c_id = c.get("id")
+            
+            # GraphQL restituisce il dexId come numero o array di numeri
+            dex_id = c.get("dexId")
+            if isinstance(dex_id, list) and len(dex_id) > 0:
+                dex_list = [dex_id[0]]
+            elif isinstance(dex_id, int):
+                dex_list = [dex_id]
+            else:
+                dex_list = None
+                
+            types = c.get("types")
+            type_str = [types[0]] if types and isinstance(types, list) and len(types) > 0 else None
+            
             out.append({
                 "id": orig_c_id if lang == 'en' else f"{orig_c_id}-{lang}",
                 "name": c.get("name", "Unknown card"),
                 "number": c.get("localId"),
                 "rarity": c.get("rarity"),
-                "types": [c.get("types", [])[0]] if c.get("types") else None,
-                "nationalPokedexNumbers": [c.get("dexId")] if c.get("dexId") else None,
+                "types": type_str,
+                "nationalPokedexNumbers": dex_list,
                 "images": {
                     "small": f"{img_base}/low.png" if img_base else None,
                     "large": f"{img_base}/high.png" if img_base else None,
                 },
-                "set": {
-                    "id": set_id # Manteniamo l'ID isolato
-                },
+                "set": {"id": set_id},
                 "language": lang
             })
         return out
     except Exception as e:
-        raise PokemonAPIError(f"Both primary API and TCGdex fallback failed for {set_id}: {e}")
+        raise PokemonAPIError(f"TCGdex GraphQL failed for {set_id}: {e}")
 
 
 # ---------- Emergency Live Search ----------
 
 def fetch_cards_by_pokedex(pokedex_number: int, lang='en') -> list[dict]:
     if lang != 'en':
-        try:
-            resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/dex-ids/{pokedex_number}", timeout=30)
-            resp.raise_for_status()
-            data = resp.json()
-            cards = data.get("cards", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-            out = []
-            for c in cards:
-                img_base = c.get("image")
-                c_id = c.get("id", "")
-                orig_s_id = c_id.rsplit("-", 1)[0] if "-" in c_id else None
-                
-                out.append({
-                    "id": c_id if lang == 'en' else f"{c_id}-{lang}",
-                    "name": c.get("name", "Unknown card"),
-                    "number": c.get("localId"),
-                    "nationalPokedexNumbers": [pokedex_number],
-                    "images": {
-                        "small": f"{img_base}/low.png" if img_base else None,
-                        "large": f"{img_base}/high.png" if img_base else None,
-                    },
-                    "set": {
-                        "id": orig_s_id if lang == 'en' else (f"{orig_s_id}-{lang}" if orig_s_id else None)
-                    },
-                    "language": lang
-                })
-            return out
-        except:
-            return []
+        # Con la query locale ora coperta da GraphQL, possiamo evitare il fetch massivo live qui
+        return []
 
     try:
         params = {"q": f"nationalPokedexNumbers:{pokedex_number}"}
@@ -225,8 +232,9 @@ def fetch_cards_by_pokedex(pokedex_number: int, lang='en') -> list[dict]:
 
 def fetch_cards_by_name(name: str, lang='en') -> list[dict]:
     if lang != 'en':
+        tcg_lang = 'zh-tw' if lang == 'zh-cn' else lang
         try:
-            resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/cards?name={name}", timeout=30)
+            resp = requests.get(f"https://api.tcgdex.net/v2/{tcg_lang}/cards?name={name}", timeout=30)
             resp.raise_for_status()
             raw_cards = resp.json()
             out = []
