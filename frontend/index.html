@@ -83,7 +83,6 @@
         <div class="lang-selector" style="display:flex; gap:8px;">
           <div class="chip" onclick="changeLang('en', this)">🇬🇧 English</div>
           <div class="chip" onclick="changeLang('ja', this)">🇯🇵 日本語</div>
-          <div class="chip" onclick="changeLang('zh-cn', this)">🇨🇳 中文</div>
           <div class="chip" onclick="changeLang('all', this)">🌍 All</div>
         </div>
     </div>
@@ -144,6 +143,12 @@
     let raritiesLoaded = false;
     let typesLoaded = false;
     let currentLang = localStorage.getItem('pokyudex_lang') || 'en';
+
+    // Rimuoviamo zh-cn se era rimasto in cache per sbaglio
+    if (currentLang === 'zh-cn') {
+      currentLang = 'en';
+      localStorage.setItem('pokyudex_lang', 'en');
+    }
 
     document.addEventListener("DOMContentLoaded", () => {
         const btns = document.querySelectorAll('.lang-selector .chip');
@@ -326,8 +331,6 @@
       const groups = {};
       const eraOrder = [];
 
-      // Ordina rigorosamente i set dal più nuovo al più vecchio usando la data
-      // Se la data manca, sfrutta il numero fornito in origine da TCGdex
       sets.sort((a, b) => {
         if (a.release_date && b.release_date && a.release_date !== b.release_date) {
             return b.release_date.localeCompare(a.release_date);

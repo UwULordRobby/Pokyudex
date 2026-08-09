@@ -554,7 +554,6 @@ def api_search_cards():
         pokedex_number = None
 
     # Autodettaglio Pokédex per ricerche testuali
-    # (Se scrivi "Pikachu" ma sei nel tab Giapponese, il DB lo traduce in #25 in automatico)
     if name and not pokedex_number:
         with db.get_conn() as conn:
             row = conn.execute(
@@ -564,8 +563,6 @@ def api_search_cards():
             if row and row["national_dex"]:
                 pokedex_number = row["national_dex"]
         
-        # Se ancora non l'abbiamo trovato nel database locale, forziamo una chiamata all'API INGLESE
-        # per scoprire di che numero Pokedex si tratta, prima di cercare in giapponese/cinese!
         if not pokedex_number and len(name) >= 3:
             try:
                 eng_cards = pokemon_api.fetch_cards_by_name(name, 'en')
@@ -583,7 +580,7 @@ def api_search_cards():
         if pokedex_number:
             print(f"[Search] Local database empty for Dex #{pokedex_number} ({lang}). Downloading live data...")
             try:
-                search_langs = ['en', 'ja', 'zh-cn'] if lang == 'all' else [lang]
+                search_langs = ['en', 'ja'] if lang == 'all' else [lang]
                 for l in search_langs:
                     raw_cards = pokemon_api.fetch_cards_by_pokedex(pokedex_number, l)
                     if raw_cards:
@@ -601,7 +598,7 @@ def api_search_cards():
         elif name and len(name) >= 2:
             print(f"[Search] Local database empty for '{name}' ({lang}). Downloading live data...")
             try:
-                search_langs = ['en', 'ja', 'zh-cn'] if lang == 'all' else [lang]
+                search_langs = ['en', 'ja'] if lang == 'all' else [lang]
                 for l in search_langs:
                     raw_cards = pokemon_api.fetch_cards_by_name(name, l)
                     if raw_cards:

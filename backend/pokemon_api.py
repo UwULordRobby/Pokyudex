@@ -57,9 +57,8 @@ def fetch_sets(lang='en') -> list[dict]:
 
 def _fetch_sets_tcgdex(lang='en') -> list[dict]:
     """Fallback fetcher using TCGdex API for sets, supports multiple languages."""
-    tcg_lang = 'zh-tw' if lang == 'zh-cn' else lang
     try:
-        resp = requests.get(f"https://api.tcgdex.net/v2/{tcg_lang}/sets", timeout=30)
+        resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/sets", timeout=30)
         resp.raise_for_status()
         raw_sets = resp.json()
         out = []
@@ -144,8 +143,6 @@ def _fetch_cards_tcgdex(set_id: str, lang='en') -> list[dict]:
     if lang != 'en' and set_id.endswith(f"-{lang}"):
         orig_set_id = set_id[:-(len(lang)+1)]
         
-    tcg_lang = 'zh-tw' if lang == 'zh-cn' else lang
-        
     query = """
     query($id: ID!) {
       set(id: $id) {
@@ -165,7 +162,7 @@ def _fetch_cards_tcgdex(set_id: str, lang='en') -> list[dict]:
         resp = requests.post(
             "https://api.tcgdex.net/v2/graphql",
             json={"query": query, "variables": {"id": orig_set_id}},
-            headers={"Accept-Language": tcg_lang},
+            headers={"Accept-Language": lang},
             timeout=60
         )
         resp.raise_for_status()
@@ -232,9 +229,8 @@ def fetch_cards_by_pokedex(pokedex_number: int, lang='en') -> list[dict]:
 
 def fetch_cards_by_name(name: str, lang='en') -> list[dict]:
     if lang != 'en':
-        tcg_lang = 'zh-tw' if lang == 'zh-cn' else lang
         try:
-            resp = requests.get(f"https://api.tcgdex.net/v2/{tcg_lang}/cards?name={name}", timeout=30)
+            resp = requests.get(f"https://api.tcgdex.net/v2/{lang}/cards?name={name}", timeout=30)
             resp.raise_for_status()
             raw_cards = resp.json()
             out = []
