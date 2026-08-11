@@ -436,11 +436,24 @@
       </div>
 
       <div class="filters hide-on-upload" id="modal-search-tabs-row" style="position: static; background: none; backdrop-filter: none; border-bottom: none; padding: 10px 0 15px; margin-top: 10px;">
-        <div class="chip active" id="modal-tab-wishlist-btn">❤️ Add from Wishlist</div>
+        <div class="chip active" id="modal-tab-collection-btn">★ My Collection</div>
+        <div class="chip" id="modal-tab-wishlist-btn">❤️ Add from Wishlist</div>
         <div class="chip" id="modal-tab-database-btn">🔍 Search TCG Database</div>
       </div>
 
-      <div id="modal-wishlist-fields" class="hide-on-upload" style="display: block; margin-bottom: 16px;">
+      <div id="modal-collection-fields" class="hide-on-upload" style="display: block; margin-bottom: 16px;">
+        <select id="modal-collection-sort-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 240px; height: 41px; padding: 0 14px;">
+          <option value="price_desc">Price: Highest First</option>
+          <option value="price_asc">Price: Lowest First</option>
+          <option value="date_desc">Release Date: Newest First</option>
+          <option value="date_asc">Release Date: Oldest First</option>
+          <option value="name_asc">Name: A-Z</option>
+          <option value="set_asc">Set: A-Z</option>
+          <option value="rarity_desc">Rarity: Rarest First</option>
+        </select>
+      </div>
+
+      <div id="modal-wishlist-fields" class="hide-on-upload" style="display: none; margin-bottom: 16px;">
         <select id="modal-wishlist-sort-select" class="search-bar" style="margin-top: 0; width: auto; min-width: 240px; height: 41px; padding: 0 14px;">
           <option value="price_desc">Price: Highest First</option>
           <option value="price_asc">Price: Lowest First</option>
@@ -1105,6 +1118,53 @@
     document.getElementById('modal-type-select').addEventListener('change', execOverlaySearch);
     document.getElementById('modal-database-sort-select').addEventListener('change', execOverlaySearch);
 
+    async function loadOverlayCollection() {
+      const container = document.getElementById('modal-results-container');
+      container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Loading your collection...</div>';
+      try {
+        const collCards = await api('/api/collection');
+        container.innerHTML = '';
+        if (!collCards.length) {
+          container.innerHTML = '<div class="state-msg">Your collection is empty. Add items using ★ on the Home page first!</div>';
+          return;
+        }
+
+        const criteria = document.getElementById('modal-collection-sort-select').value;
+        collCards.sort((a, b) => {
+          if (criteria === 'price_desc') return (b.price_market ?? -1) - (a.price_market ?? -1);
+          if (criteria === 'price_asc') return (a.price_market ?? Infinity) - (b.price_market ?? Infinity);
+          if (criteria === 'date_desc') return (b.release_date || "").localeCompare(a.release_date || "");
+          if (criteria === 'date_asc') return (a.release_date || "").localeCompare(b.release_date || "");
+          if (criteria === 'name_asc') return (a.name || "").localeCompare(b.name || "");
+          if (criteria === 'set_asc') return (a.set_name || "").localeCompare(b.set_name || "");
+          if (criteria === 'rarity_desc') {
+            let idxA = RARITY_RANKING.findIndex(r => r.toLowerCase() === (a.rarity || "").toLowerCase());
+            let idxB = RARITY_RANKING.findIndex(r => r.toLowerCase() === (b.rarity || "").toLowerCase());
+            return idxB - idxA;
+          }
+          return 0;
+        });
+
+        const grid = document.createElement('div');
+        grid.className = 'cards-grid';
+        collCards.forEach(c => {
+          const tile = document.createElement('div');
+          tile.className = 'card-tile';
+          tile.onclick = () => assignCardToSlot(c.id);
+          tile.innerHTML = `
+            <img src="${escapeHtml(c.image_small)}" alt="${escapeHtml(c.name)}" loading="lazy">
+            <div class="card-info">
+              <div class="card-name">${escapeHtml(c.name)} (${escapeHtml(c.card_number || 'N/A')})</div>
+              <div class="card-rarity set-name-link" title="Go to ${escapeHtml(c.set_name || 'Set')}" style="color:var(--teal); text-transform:none; cursor:pointer;" onclick="event.stopPropagation(); window.location.href='set.html?id=${encodeURIComponent(c.set_id)}&focus=${encodeURIComponent(c.id)}'">${escapeHtml(c.set_name || 'Unknown set')}</div>
+              <div style="font-family:'JetBrains Mono'; font-size:10px; color:var(--gold); margin-top:4px;">${formatPrice(c.price_market, c.currency) || 'n/a'}</div>
+            </div>
+          `;
+          grid.appendChild(tile);
+        });
+        container.appendChild(grid);
+      } catch (err) { container.innerHTML = `<div class="state-msg error">Error: ${err.message}</div>`; }
+    }
+
     async function loadOverlayWishlist() {
       const container = document.getElementById('modal-results-container');
       container.innerHTML = '<div class="state-msg"><span class="spinner"></span>Loading your wishlist collection...</div>';
@@ -1152,21 +1212,42 @@
       } catch (err) { container.innerHTML = `<div class="state-msg error">Error: ${err.message}</div>`; }
     }
 
+    document.getElementById('modal-collection-sort-select').addEventListener('change', loadOverlayCollection);
     document.getElementById('modal-wishlist-sort-select').addEventListener('change', loadOverlayWishlist);
+
+    document.getElementById('modal-tab-collection-btn').addEventListener('click', () => {
+      document.getElementById('modal-tab-collection-btn').className = 'chip active';
+      document.getElementById('modal-tab-wishlist-btn').className = 'chip';
+      document.getElementById('modal-tab-database-btn').className = 'chip';
+      
+      document.getElementById('modal-database-fields').style.display = 'none';
+      document.getElementById('modal-wishlist-fields').style.display = 'none';
+      document.getElementById('modal-collection-fields').style.display = 'block';
+      
+      loadOverlayCollection();
+    });
 
     document.getElementById('modal-tab-wishlist-btn').addEventListener('click', () => {
       document.getElementById('modal-tab-wishlist-btn').className = 'chip active';
+      document.getElementById('modal-tab-collection-btn').className = 'chip';
       document.getElementById('modal-tab-database-btn').className = 'chip';
+      
       document.getElementById('modal-database-fields').style.display = 'none';
+      document.getElementById('modal-collection-fields').style.display = 'none';
       document.getElementById('modal-wishlist-fields').style.display = 'block';
+      
       loadOverlayWishlist();
     });
 
     document.getElementById('modal-tab-database-btn').addEventListener('click', () => {
       document.getElementById('modal-tab-database-btn').className = 'chip active';
+      document.getElementById('modal-tab-collection-btn').className = 'chip';
       document.getElementById('modal-tab-wishlist-btn').className = 'chip';
-      document.getElementById('modal-database-fields').style.display = 'block';
+      
       document.getElementById('modal-wishlist-fields').style.display = 'none';
+      document.getElementById('modal-collection-fields').style.display = 'none';
+      document.getElementById('modal-database-fields').style.display = 'block';
+      
       loadModalFilters();
       execOverlaySearch();
     });
@@ -1184,20 +1265,28 @@
       
       const b = currentBinderData.binder;
       if (b && b.type === 'pokedex') {
+        document.getElementById('modal-tab-collection-btn').style.display = 'none';
         document.getElementById('modal-tab-wishlist-btn').style.display = 'none';
         document.getElementById('modal-tab-database-btn').className = 'chip active';
         document.getElementById('modal-database-fields').style.display = 'block';
+        document.getElementById('modal-collection-fields').style.display = 'none';
         document.getElementById('modal-wishlist-fields').style.display = 'none';
         document.getElementById('modal-card-search').value = ''; 
         loadModalFilters();
         execOverlaySearch();
       } else {
+        document.getElementById('modal-tab-collection-btn').style.display = 'inline-block';
         document.getElementById('modal-tab-wishlist-btn').style.display = 'inline-block';
-        document.getElementById('modal-tab-wishlist-btn').className = 'chip active';
+        
+        document.getElementById('modal-tab-collection-btn').className = 'chip active';
+        document.getElementById('modal-tab-wishlist-btn').className = 'chip';
         document.getElementById('modal-tab-database-btn').className = 'chip';
+        
         document.getElementById('modal-database-fields').style.display = 'none';
-        document.getElementById('modal-wishlist-fields').style.display = 'block';
-        loadOverlayWishlist();
+        document.getElementById('modal-wishlist-fields').style.display = 'none';
+        document.getElementById('modal-collection-fields').style.display = 'block';
+        
+        loadOverlayCollection();
       }
     }
 

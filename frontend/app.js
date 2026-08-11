@@ -269,6 +269,7 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   container.innerHTML = `
     <div class="color-swatch-btn" style="background-color: ${color}"></div>
     <div class="color-picker-dropdown">
+      <div class="color-picker-backdrop"></div>
       <button class="cp-size-toggle-btn" title="Toggle Full Page" type="button">⤢</button>
       <div class="color-picker-wheel-zone">
         <div class="color-wheel">
@@ -294,6 +295,7 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
 
   const swatchBtn = container.querySelector('.color-swatch-btn');
   const dropdown = container.querySelector('.color-picker-dropdown');
+  const backdrop = container.querySelector('.color-picker-backdrop');
   const wheel = container.querySelector('.color-wheel');
   const marker = container.querySelector('.color-wheel-marker');
   const lightSlider = container.querySelector('.cp-light');
@@ -316,10 +318,18 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     dropdown.classList.toggle('active');
     if (dropdown.classList.contains('active')) {
       updateMarkerPosition(hsl.h, hsl.s);
-      updateColor(); // Forza l'aggiornamento grafico del velo di luminosità
+      updateColor();
       renderSavedColors();
     }
   });
+
+  if (backdrop) {
+    backdrop.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.classList.remove('active');
+      dropdown.classList.remove('expanded');
+    });
+  }
 
   dropdown.addEventListener('click', (e) => { e.stopPropagation(); });
 
@@ -392,7 +402,6 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     hsl.l = parseInt(lightSlider.value);
     lValSpan.textContent = hsl.l + '%';
     
-    // Aggiorna l'overlay trasparente di luminosità (non il colore puro sotto)
     let overlayColor = 'transparent';
     if (hsl.l < 50) {
       let opacity = (50 - hsl.l) / 50;
@@ -536,15 +545,14 @@ function initGlobalCardModal() {
   }
 
   let isTicking = false;
-  modal.addEventListener('mousemove', (e) => {
-    if (modal.style.display === 'none') return;
-    
+
+  function handleCardTilt(clientX, clientY) {
     if (!isTicking) {
       window.requestAnimationFrame(() => {
         const rect = holoCard.getBoundingClientRect();
         if (rect.width !== 0 && rect.height !== 0) {
-          const px = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
-          const py = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+          const px = Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100));
+          const py = Math.min(100, Math.max(0, ((clientY - rect.top) / rect.height) * 100));
           const cx = px - 50;
           const cy = py - 50;
           const edge = Math.min(1, Math.sqrt(cx * cx + cy * cy) / 70);
@@ -562,9 +570,29 @@ function initGlobalCardModal() {
       });
       isTicking = true;
     }
+  }
+
+  modal.addEventListener('mousemove', (e) => {
+    if (modal.style.display === 'none') return;
+    handleCardTilt(e.clientX, e.clientY);
   });
 
+  modal.addEventListener('touchmove', (e) => {
+    if (modal.style.display === 'none') return;
+    if (e.touches && e.touches.length > 0) {
+      handleCardTilt(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, { passive: true });
+
+  modal.addEventListener('touchstart', (e) => {
+    if (modal.style.display === 'none') return;
+    if (e.touches && e.touches.length > 0) {
+      handleCardTilt(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, { passive: true });
+
   modal.addEventListener('mouseleave', resetPosition);
+  modal.addEventListener('touchend', resetPosition);
   backdrop.addEventListener('click', hideModal);
   closeBtn.addEventListener('click', hideModal);
 

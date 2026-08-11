@@ -586,8 +586,9 @@ h1 {
 
 .color-wheel {
   position: relative;
-  width: 130px; 
-  height: 130px;
+  width: 180px; 
+  height: 180px;
+  margin: 0 auto;
   border-radius: 50%;
   background: conic-gradient(
     from 0deg,
@@ -621,8 +622,8 @@ h1 {
 
 .color-wheel-marker {
   position: absolute;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   border: 2px solid #ffffff;
   background: transparent;
@@ -659,23 +660,37 @@ h1 {
   cursor: pointer;
 }
 
+/* Modifiche Color Picker UI */
 .color-picker-dropdown {
   display: none;
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-  z-index: 5000; 
-  width: 210px; 
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  z-index: 100000; 
+  width: 280px; 
 }
 
 .color-picker-dropdown.active {
   display: block;
   animation: fadeIn 0.15s ease-out;
+}
+
+/* Sfondo scuro e cliccabile dietro al color picker fisso */
+.color-picker-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(8, 7, 12, 0.7);
+  z-index: -1;
+  cursor: default;
 }
 
 .color-picker-live-preview {
