@@ -660,7 +660,7 @@ h1 {
   cursor: pointer;
 }
 
-/* Modifiche Color Picker UI */
+/* Modifiche Color Picker UI per evitare overflow fuori schermo */
 .color-picker-dropdown {
   display: none;
   position: fixed;
@@ -673,7 +673,10 @@ h1 {
   padding: 24px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
   z-index: 100000; 
-  width: 280px; 
+  width: 290px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .color-picker-dropdown.active {
@@ -681,7 +684,6 @@ h1 {
   animation: fadeIn 0.15s ease-out;
 }
 
-/* Sfondo scuro e cliccabile dietro al color picker fisso */
 .color-picker-backdrop {
   position: fixed;
   top: 0;
@@ -730,30 +732,31 @@ h1 {
 }
 
 .color-picker-dropdown.expanded .color-wheel {
-  width: 320px;
-  height: 320px;
+  width: 280px;
+  height: 280px;
 }
 
 .color-picker-dropdown.expanded .slider-group,
 .color-picker-dropdown.expanded .color-picker-live-preview,
-.color-picker-dropdown.expanded .color-picker-saved-container {
+.color-picker-dropdown.expanded .color-picker-saved-container,
+.color-picker-dropdown.expanded .cp-done-btn {
   width: 100%;
-  max-width: 320px;
+  max-width: 280px;
 }
 
 .color-picker-dropdown.expanded .color-picker-live-preview {
   order: -1; 
-  padding: 16px;
-  font-size: 20px;
+  padding: 14px;
+  font-size: 18px;
   border-radius: var(--radius);
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   margin-top: 0;
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
   border: 1px solid rgba(255,255,255,0.1);
 }
 
 .color-picker-dropdown.expanded .slider-group {
-  margin-top: 24px;
+  margin-top: 20px;
 }
 
 .color-picker-dropdown.expanded .cp-size-toggle-btn {
@@ -984,10 +987,6 @@ h1 {
   .board-tile-actions { top: 6px !important; right: 6px !important; gap: 4px !important; }
   .board-tile-actions button { width: 20px !important; height: 20px !important; font-size: 9px !important; }
 
-  /* ========================================================= */
-  /* FIX LAYOUT INTESTAZIONI BINDER/BOARDS SU MOBILE */
-  /* ========================================================= */
-  
   .binder-view-toggles { display: none !important; } 
   
   .binder-header {
@@ -1011,7 +1010,6 @@ h1 {
     align-items: stretch !important;
   }
 
-  /* Griglia perfetta per i bottoni inferiori */
   .binder-nav-actions {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
@@ -1030,9 +1028,6 @@ h1 {
   }
   .board-header-actions button { flex: 1 !important; min-width: 0 !important; margin: 0 !important; padding: 10px !important; }
 
-  /* ========================================================= */
-  /* BINDER OVERFLOW FIX MOBILE */
-  /* ========================================================= */
   #binder-view-wrapper {
     width: 100vw !important;
     left: 50% !important;
