@@ -262,8 +262,13 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   if (!container) return null;
   const input = document.getElementById(hiddenInputId);
   if (!input) return null;
-  let color = input.value || defaultColor || '#ffffff';
+  let color = input.value || defaultColor || '#4f8bf9';
   let hsl = hexToHsl(color);
+  
+  // Forza luminosità iniziale a 50 se è troppo scuro o non definito
+  if (hsl.l < 15 || hsl.l > 85) {
+    hsl.l = 50;
+  }
 
   container.className = 'custom-color-picker-container';
   container.innerHTML = `
@@ -317,10 +322,16 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
       if (d !== dropdown) {
         d.classList.remove('active');
         d.classList.remove('expanded');
+        sizeToggleBtn.textContent = '⤢';
       }
     });
     dropdown.classList.toggle('active');
     if (dropdown.classList.contains('active')) {
+      // All'apertura forziamo luminosità a 50 se il colore attuale è spento/nero
+      if (hsl.l < 15 || hsl.l > 85) {
+        hsl.l = 50;
+        lightSlider.value = 50;
+      }
       updateMarkerPosition(hsl.h, hsl.s);
       updateColor();
       renderSavedColors();
@@ -332,16 +343,17 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
       e.stopPropagation();
       dropdown.classList.remove('active');
       dropdown.classList.remove('expanded');
+      sizeToggleBtn.textContent = '⤢';
     });
   }
 
   if (backdrop) {
-    // Usa pointerdown per prevenire il propagarsi su dispositivi touch
     backdrop.addEventListener('pointerdown', (e) => {
       e.preventDefault(); 
       e.stopPropagation();
       dropdown.classList.remove('active');
       dropdown.classList.remove('expanded');
+      sizeToggleBtn.textContent = '⤢';
     });
     backdrop.addEventListener('click', (e) => {
       e.preventDefault(); 
@@ -354,7 +366,7 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   function updateMarkerPosition(h, s) {
     let currentWidth = wheel.offsetWidth;
     if (currentWidth === 0) {
-      currentWidth = dropdown.classList.contains('expanded') ? 320 : 180;
+      currentWidth = dropdown.classList.contains('expanded') ? Math.min(320, window.innerWidth - 80) : 180;
     }
     const r = currentWidth / 2;
     const angleRad = (h - 90) * (Math.PI / 180);
@@ -368,7 +380,8 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   sizeToggleBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.classList.toggle('expanded');
-    sizeToggleBtn.textContent = dropdown.classList.contains('expanded') ? '✕' : '⤢';
+    const isExpanded = dropdown.classList.contains('expanded');
+    sizeToggleBtn.textContent = isExpanded ? '✕' : '⤢';
     setTimeout(() => { updateMarkerPosition(hsl.h, hsl.s); }, 10);
   });
 
@@ -408,7 +421,6 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     isDraggingWheel = true;
     wheel.setPointerCapture(e.pointerId);
     
-    // Auto-fix luminosità: se l'utente tocca la ruota ed è troppo scuro/chiaro, la metto a 50
     if (hsl.l < 15 || hsl.l > 85) {
       hsl.l = 50;
       lightSlider.value = 50;
@@ -559,7 +571,7 @@ function initGlobalCardModal() {
   const holoCard = document.getElementById('global-holo-card');
 
   function resetPosition() {
-    holoCard.style.transition = 'transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s ease';
+    holoCard.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s ease';
     holoCard.style.setProperty('--rot-x', '0deg');
     holoCard.style.setProperty('--rot-y', '0deg');
     holoCard.style.setProperty('--dx', '50%');
@@ -602,7 +614,6 @@ function initGlobalCardModal() {
     handleCardTilt(e.clientX, e.clientY);
   });
 
-  // e.preventDefault() BLOCCA il pull-to-refresh e lo scroll mentre muovi la carta
   modal.addEventListener('touchmove', (e) => {
     if (modal.style.display === 'none') return;
     e.preventDefault(); 
@@ -624,8 +635,15 @@ function initGlobalCardModal() {
   closeBtn.addEventListener('click', hideModal);
 
   function hideModal() {
-    modal.style.display = 'none';
-    resetPosition();
+    const transformContainer = modal.querySelector('.global-card-transform-container');
+    // Chiusura pulita immediata senza flickering di rimbalzo
+    transformContainer.style.transition = 'opacity 0.15s ease';
+    transformContainer.style.opacity = '0';
+    setTimeout(() => {
+      modal.style.display = 'none';
+      transformContainer.style.opacity = '1';
+      resetPosition();
+    }, 150);
   }
 
   window.openGlobalCardModal = function(cardOrName, imageUrl, priceLabel, rarityStr) {
@@ -644,23 +662,86 @@ function initGlobalCardModal() {
     document.querySelector('.global-modal-price').textContent = priceTarget;
 
     const transformContainer = modal.querySelector('.global-card-transform-container');
-    transformContainer.style.transform = 'perspective(1200px) scale(0.9)';
+    transformContainer.style.transition = 'none';
+    transformContainer.style.transform = 'perspective(1200px) scale(0.95)';
     modal.style.display = 'flex';
     
     requestAnimationFrame(() => {
-      transformContainer.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+      transformContainer.style.transition = 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)';
       transformContainer.style.transform = 'perspective(1200px) scale(1)';
     });
   };
 }
 
-document.addEventListener('DOMContentLoaded', initGlobalCardModal);
-if (document.body) { initGlobalCardModal(); } else { window.addEventListener('load', initGlobalCardModal); }
+// ==========================================================================
+// SCROLL TO TOP FLOATING BUTTON (Tasto Torna in Alto)
+// ==========================================================================
+function initScrollToTopButton() {
+  if (document.getElementById('scroll-to-top-btn')) return;
+
+  const btn = document.createElement('button');
+  btn.id = 'scroll-to-top-btn';
+  btn.innerHTML = '▲';
+  btn.title = 'Torna in alto';
+  btn.style.cssText = `
+    position: fixed;
+    bottom: 24px;
+    right: 90px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--gold);
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    z-index: 1150;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.15s ease, border-color 0.15s ease;
+  `;
+
+  btn.onmouseover = () => { btn.style.borderColor = 'var(--gold)'; btn.style.transform = 'scale(1.08)'; };
+  btn.onmouseout = () => { btn.style.borderColor = 'var(--border)'; btn.style.transform = 'scale(1)'; };
+  btn.onclick = () => { window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+  document.body.appendChild(btn);
+
+  window.addEventListener('scroll', () => {
+    if (window.scrollY > 300) {
+      btn.style.opacity = '1';
+      btn.style.visibility = 'visible';
+    } else {
+      btn.style.opacity = '0';
+      btn.style.visibility = 'hidden';
+    }
+  }, { passive: true });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initGlobalCardModal();
+  initScrollToTopButton();
+});
+if (document.body) { 
+  initGlobalCardModal(); 
+  initScrollToTopButton();
+} else { 
+  window.addEventListener('load', () => {
+    initGlobalCardModal();
+    initScrollToTopButton();
+  }); 
+}
 
 document.addEventListener('click', () => {
   document.querySelectorAll('.color-picker-dropdown.active').forEach(d => {
     d.classList.remove('active');
     d.classList.remove('expanded');
+    const toggle = d.querySelector('.cp-size-toggle-btn');
+    if(toggle) toggle.textContent = '⤢';
   });
 });
 

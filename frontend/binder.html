@@ -382,13 +382,11 @@
         <div class="form-group" style="flex:1; margin:0;">
           <label style="text-align: center; display: block;">Cover</label>
           <div id="b-color-picker" style="display:flex; justify-content:center;"></div>
-          <!-- Fix colore default luminoso al posto del #1c1a25 nero -->
           <input type="hidden" id="b-color" value="#4f8bf9" />
         </div>
         <div class="form-group" style="flex:1; margin:0;">
           <label style="text-align: center; display: block;">Inner</label>
           <div id="b-inner-color-picker" style="display:flex; justify-content:center;"></div>
-          <!-- Fix colore default luminoso -->
           <input type="hidden" id="b-inner-color" value="#4f8bf9" />
         </div>
         <div class="form-group" style="flex:1; margin:0;">
@@ -932,7 +930,6 @@
       if (targetCard) simulatedSlots[sourceSlotNum] = { ...targetCard, slot_number: sourceSlotNum };
 
       if (!checkBinderValidity(simulatedSlots, numCols, numRows)) {
-        // Fallimento silenzioso: nessun avviso
         renderActiveGrid();
         return;
       }
@@ -1417,7 +1414,6 @@
         tile.addEventListener('dragover', handleDragOver);
         tile.addEventListener('drop', handleDrop);
         
-        // Gestione click slot per il sistema Click-to-Move / Swap
         tile.onclick = () => {
           if (activeMovingSlot !== null) {
             executeMoveOrSwapSlots(activeMovingSlot, slotNum);
