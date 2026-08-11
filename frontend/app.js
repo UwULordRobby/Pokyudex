@@ -283,6 +283,9 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
         <input type="range" class="cp-light" min="0" max="100" value="${hsl.l}">
       </div>
       <input type="text" class="color-picker-live-preview" value="${color.toUpperCase()}" maxlength="7" style="background-color: ${color}; color: ${hsl.l > 50 ? '#121118' : '#ece8e2'}">
+      
+      <button type="button" class="btn btn-accent cp-done-btn" style="width: 100%; margin-top: 12px; font-size: 13px; height: 34px;">SAVE / DONE</button>
+      
       <div class="color-picker-saved-container">
         <div class="color-picker-saved-headline">
           <span>Saved Colors</span>
@@ -304,6 +307,7 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   const savedSlotsContainer = container.querySelector('.color-picker-saved-slots');
   const saveBtn = container.querySelector('.save-current-color-btn');
   const sizeToggleBtn = container.querySelector('.cp-size-toggle-btn');
+  const doneBtn = container.querySelector('.cp-done-btn');
 
   let isDraggingWheel = false;
 
@@ -323,11 +327,25 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     }
   });
 
-  if (backdrop) {
-    backdrop.addEventListener('click', (e) => {
+  if (doneBtn) {
+    doneBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       dropdown.classList.remove('active');
       dropdown.classList.remove('expanded');
+    });
+  }
+
+  if (backdrop) {
+    // Usa pointerdown per prevenire il propagarsi su dispositivi touch
+    backdrop.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); 
+      e.stopPropagation();
+      dropdown.classList.remove('active');
+      dropdown.classList.remove('expanded');
+    });
+    backdrop.addEventListener('click', (e) => {
+      e.preventDefault(); 
+      e.stopPropagation();
     });
   }
 
@@ -336,7 +354,7 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   function updateMarkerPosition(h, s) {
     let currentWidth = wheel.offsetWidth;
     if (currentWidth === 0) {
-      currentWidth = dropdown.classList.contains('expanded') ? 320 : 130;
+      currentWidth = dropdown.classList.contains('expanded') ? 320 : 180;
     }
     const r = currentWidth / 2;
     const angleRad = (h - 90) * (Math.PI / 180);
@@ -389,6 +407,13 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   wheel.addEventListener('pointerdown', (e) => {
     isDraggingWheel = true;
     wheel.setPointerCapture(e.pointerId);
+    
+    // Auto-fix luminosità: se l'utente tocca la ruota ed è troppo scuro/chiaro, la metto a 50
+    if (hsl.l < 15 || hsl.l > 85) {
+      hsl.l = 50;
+      lightSlider.value = 50;
+    }
+    
     handleWheelEvent(e);
   });
 
@@ -577,12 +602,14 @@ function initGlobalCardModal() {
     handleCardTilt(e.clientX, e.clientY);
   });
 
+  // e.preventDefault() BLOCCA il pull-to-refresh e lo scroll mentre muovi la carta
   modal.addEventListener('touchmove', (e) => {
     if (modal.style.display === 'none') return;
+    e.preventDefault(); 
     if (e.touches && e.touches.length > 0) {
       handleCardTilt(e.touches[0].clientX, e.touches[0].clientY);
     }
-  }, { passive: true });
+  }, { passive: false });
 
   modal.addEventListener('touchstart', (e) => {
     if (modal.style.display === 'none') return;

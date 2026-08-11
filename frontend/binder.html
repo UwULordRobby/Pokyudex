@@ -382,12 +382,14 @@
         <div class="form-group" style="flex:1; margin:0;">
           <label style="text-align: center; display: block;">Cover</label>
           <div id="b-color-picker" style="display:flex; justify-content:center;"></div>
-          <input type="hidden" id="b-color" value="#1c1a25" />
+          <!-- Fix colore default luminoso al posto del #1c1a25 nero -->
+          <input type="hidden" id="b-color" value="#4f8bf9" />
         </div>
         <div class="form-group" style="flex:1; margin:0;">
           <label style="text-align: center; display: block;">Inner</label>
           <div id="b-inner-color-picker" style="display:flex; justify-content:center;"></div>
-          <input type="hidden" id="b-inner-color" value="#1c1a25" />
+          <!-- Fix colore default luminoso -->
+          <input type="hidden" id="b-inner-color" value="#4f8bf9" />
         </div>
         <div class="form-group" style="flex:1; margin:0;">
           <label style="text-align: center; display: block;">Panel</label>
@@ -532,18 +534,18 @@
     const DEFAULT_BINDER_DOT_COLOR = '#4f8bf9';
     renderBloomLayer(DEFAULT_BINDER_PALETTE);
 
-    const bColorPicker = createCustomColorPicker(document.getElementById('b-color-picker'), 'b-color', '#1c1a25');
-    const bInnerColorPicker = createCustomColorPicker(document.getElementById('b-inner-color-picker'), 'b-inner-color', '#1c1a25');
+    const bColorPicker = createCustomColorPicker(document.getElementById('b-color-picker'), 'b-color', '#4f8bf9');
+    const bInnerColorPicker = createCustomColorPicker(document.getElementById('b-inner-color-picker'), 'b-inner-color', '#4f8bf9');
     const bPanelColorPicker = createCustomColorPicker(document.getElementById('b-panel-color-picker'), 'b-panel-color', '#16141d');
 
-    const editBColorPicker = createCustomColorPicker(document.getElementById('edit-b-color-picker'), 'edit-b-color', '#1c1a25');
-    const editBInnerColorPicker = createCustomColorPicker(document.getElementById('edit-b-inner-color-picker'), 'edit-b-inner-color', '#1c1a25');
+    const editBColorPicker = createCustomColorPicker(document.getElementById('edit-b-color-picker'), 'edit-b-color', '#4f8bf9');
+    const editBInnerColorPicker = createCustomColorPicker(document.getElementById('edit-b-inner-color-picker'), 'edit-b-inner-color', '#4f8bf9');
     const editBPanelColorPicker = createCustomColorPicker(document.getElementById('edit-b-panel-color-picker'), 'edit-b-panel-color', '#16141d');
 
     function openNewBinderModal() {
       document.getElementById('b-name').value = '';
-      bColorPicker.setValue('#1c1a25');
-      bInnerColorPicker.setValue('#1c1a25');
+      bColorPicker.setValue('#4f8bf9');
+      bInnerColorPicker.setValue('#4f8bf9');
       bPanelColorPicker.setValue('#16141d');
       document.getElementById('new-binder-modal').style.display = 'flex';
     }
