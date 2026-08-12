@@ -659,6 +659,7 @@ h1 {
   cursor: pointer;
 }
 
+/* Modifiche Color Picker UI per evitare overflow fuori schermo */
 .color-picker-dropdown {
   display: none;
   position: fixed;
@@ -713,6 +714,7 @@ h1 {
   position: fixed;
   top: 0;
   left: 0;
+  transform: none; /* FIX: resetta il translate per bloccarlo al centro / frame visibile */
   width: 100vw;
   height: 100vh;
   background: rgba(10, 9, 14, 0.98);
@@ -835,9 +837,10 @@ h1 {
   margin-bottom: 10px;
 }
 
+/* MODIFICA: Alzato il trigger per non sovrapporsi col tasto Torna Su */
 .compact-upload-trigger-zone {
   position: fixed;
-  bottom: 24px;
+  bottom: 85px; 
   right: 24px;
   z-index: 1200;
 }

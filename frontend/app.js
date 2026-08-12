@@ -265,10 +265,6 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   let color = input.value || defaultColor || '#4f8bf9';
   let hsl = hexToHsl(color);
   
-  if (hsl.l < 15 || hsl.l > 85) {
-    hsl.l = 50;
-  }
-
   container.className = 'custom-color-picker-container';
   container.innerHTML = `
     <div class="color-swatch-btn" style="background-color: ${color}"></div>
@@ -326,11 +322,11 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
       }
     });
     dropdown.classList.toggle('active');
+    
+    // Imposta la luminosità al 50% *ogni volta* che si apre
     if (dropdown.classList.contains('active')) {
-      if (hsl.l < 15 || hsl.l > 85) {
-        hsl.l = 50;
-        lightSlider.value = 50;
-      }
+      hsl.l = 50; 
+      lightSlider.value = 50;
       updateMarkerPosition(hsl.h, hsl.s);
       updateColor();
       renderSavedColors();
@@ -346,7 +342,6 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     });
   }
 
-  // Chiusura sicura sul backdrop cliccabile per non far propagare l'evento alla modale madre
   if (backdrop) {
     const closeDropdown = (e) => {
       e.preventDefault();
@@ -419,12 +414,6 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   wheel.addEventListener('pointerdown', (e) => {
     isDraggingWheel = true;
     wheel.setPointerCapture(e.pointerId);
-    
-    if (hsl.l < 15 || hsl.l > 85) {
-      hsl.l = 50;
-      lightSlider.value = 50;
-    }
-    
     handleWheelEvent(e);
   });
 
@@ -632,12 +621,11 @@ function initGlobalCardModal() {
   closeBtn.addEventListener('click', hideModal);
 
   function hideModal() {
-    // Dissolvenza morbida senza movimenti scattanti
     modal.style.opacity = '0';
     setTimeout(() => {
       modal.style.display = 'none';
       resetPosition();
-    }, 200); // 200ms per allinearsi alla transition css
+    }, 200); 
   }
 
   window.openGlobalCardModal = function(cardOrName, imageUrl, priceLabel, rarityStr) {
@@ -682,7 +670,7 @@ function initScrollToTopButton() {
   btn.title = 'Torna in alto';
   btn.style.cssText = `
     position: fixed;
-    bottom: 85px; 
+    bottom: 24px; 
     right: 24px;  
     width: 48px;
     height: 48px;
