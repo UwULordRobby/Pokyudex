@@ -15,7 +15,6 @@
 
 * { box-sizing: border-box; }
 
-/* Impedisce all'intera pagina di sformarsi orizzontalmente */
 html, body {
   max-width: 100vw;
   overflow-x: hidden;
@@ -660,7 +659,6 @@ h1 {
   cursor: pointer;
 }
 
-/* Modifiche Color Picker UI per evitare overflow fuori schermo */
 .color-picker-dropdown {
   display: none;
   position: fixed;
@@ -732,8 +730,11 @@ h1 {
 }
 
 .color-picker-dropdown.expanded .color-wheel {
-  width: 280px;
-  height: 280px;
+  width: 70vw;
+  height: 70vw;
+  max-width: 280px;
+  max-height: 280px;
+  margin: 0 auto;
 }
 
 .color-picker-dropdown.expanded .slider-group,

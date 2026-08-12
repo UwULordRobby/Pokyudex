@@ -265,7 +265,6 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   let color = input.value || defaultColor || '#4f8bf9';
   let hsl = hexToHsl(color);
   
-  // Forza luminosità iniziale a 50 se è troppo scuro o non definito
   if (hsl.l < 15 || hsl.l > 85) {
     hsl.l = 50;
   }
@@ -322,12 +321,12 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
       if (d !== dropdown) {
         d.classList.remove('active');
         d.classList.remove('expanded');
-        sizeToggleBtn.textContent = '⤢';
+        const tg = d.querySelector('.cp-size-toggle-btn');
+        if (tg) tg.textContent = '⤢';
       }
     });
     dropdown.classList.toggle('active');
     if (dropdown.classList.contains('active')) {
-      // All'apertura forziamo luminosità a 50 se il colore attuale è spento/nero
       if (hsl.l < 15 || hsl.l > 85) {
         hsl.l = 50;
         lightSlider.value = 50;
@@ -347,18 +346,18 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     });
   }
 
+  // Chiusura sicura sul backdrop cliccabile per non far propagare l'evento alla modale madre
   if (backdrop) {
-    backdrop.addEventListener('pointerdown', (e) => {
-      e.preventDefault(); 
+    const closeDropdown = (e) => {
+      e.preventDefault();
       e.stopPropagation();
       dropdown.classList.remove('active');
       dropdown.classList.remove('expanded');
       sizeToggleBtn.textContent = '⤢';
-    });
-    backdrop.addEventListener('click', (e) => {
-      e.preventDefault(); 
-      e.stopPropagation();
-    });
+    };
+    backdrop.addEventListener('mousedown', closeDropdown);
+    backdrop.addEventListener('touchstart', closeDropdown, { passive: false });
+    backdrop.addEventListener('click', closeDropdown);
   }
 
   dropdown.addEventListener('click', (e) => { e.stopPropagation(); });
@@ -366,7 +365,7 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   function updateMarkerPosition(h, s) {
     let currentWidth = wheel.offsetWidth;
     if (currentWidth === 0) {
-      currentWidth = dropdown.classList.contains('expanded') ? Math.min(320, window.innerWidth - 80) : 180;
+      currentWidth = dropdown.classList.contains('expanded') ? Math.min(280, window.innerWidth * 0.7) : 180;
     }
     const r = currentWidth / 2;
     const angleRad = (h - 90) * (Math.PI / 180);
@@ -544,7 +543,7 @@ function initGlobalCardModal() {
   if (document.getElementById('global-card-modal')) return;
 
   const modalHtml = `
-    <div id="global-card-modal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(8,7,12,0.94); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); align-items:center; justify-content:center; box-sizing:border-box; padding:40px;">
+    <div id="global-card-modal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(8,7,12,0.94); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); align-items:center; justify-content:center; box-sizing:border-box; padding:40px; transition: opacity 0.2s ease;">
       <div class="global-modal-backdrop" style="position:absolute; inset:0; cursor:zoom-out;"></div>
       <div class="global-card-transform-container" style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; max-width:90vw;">
         <button class="modal-close" style="position:absolute; top:-18px; right:-18px; width:36px; height:36px; border-radius:50%; background:#1c1a25; border:1px solid #322f3d; color:#fff; font-size:20px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:100;">&times;</button>
@@ -571,7 +570,7 @@ function initGlobalCardModal() {
   const holoCard = document.getElementById('global-holo-card');
 
   function resetPosition() {
-    holoCard.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s ease';
+    holoCard.style.transition = 'none';
     holoCard.style.setProperty('--rot-x', '0deg');
     holoCard.style.setProperty('--rot-y', '0deg');
     holoCard.style.setProperty('--dx', '50%');
@@ -629,21 +628,16 @@ function initGlobalCardModal() {
     }
   }, { passive: true });
 
-  modal.addEventListener('mouseleave', resetPosition);
-  modal.addEventListener('touchend', resetPosition);
   backdrop.addEventListener('click', hideModal);
   closeBtn.addEventListener('click', hideModal);
 
   function hideModal() {
-    const transformContainer = modal.querySelector('.global-card-transform-container');
-    // Chiusura pulita immediata senza flickering di rimbalzo
-    transformContainer.style.transition = 'opacity 0.15s ease';
-    transformContainer.style.opacity = '0';
+    // Dissolvenza morbida senza movimenti scattanti
+    modal.style.opacity = '0';
     setTimeout(() => {
       modal.style.display = 'none';
-      transformContainer.style.opacity = '1';
       resetPosition();
-    }, 150);
+    }, 200); // 200ms per allinearsi alla transition css
   }
 
   window.openGlobalCardModal = function(cardOrName, imageUrl, priceLabel, rarityStr) {
@@ -664,9 +658,12 @@ function initGlobalCardModal() {
     const transformContainer = modal.querySelector('.global-card-transform-container');
     transformContainer.style.transition = 'none';
     transformContainer.style.transform = 'perspective(1200px) scale(0.95)';
+    
+    modal.style.opacity = '0';
     modal.style.display = 'flex';
     
     requestAnimationFrame(() => {
+      modal.style.opacity = '1';
       transformContainer.style.transition = 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)';
       transformContainer.style.transform = 'perspective(1200px) scale(1)';
     });
@@ -674,7 +671,7 @@ function initGlobalCardModal() {
 }
 
 // ==========================================================================
-// SCROLL TO TOP FLOATING BUTTON (Tasto Torna in Alto)
+// SCROLL TO TOP FLOATING BUTTON
 // ==========================================================================
 function initScrollToTopButton() {
   if (document.getElementById('scroll-to-top-btn')) return;
@@ -685,8 +682,8 @@ function initScrollToTopButton() {
   btn.title = 'Torna in alto';
   btn.style.cssText = `
     position: fixed;
-    bottom: 24px;
-    right: 90px;
+    bottom: 85px; 
+    right: 24px;  
     width: 48px;
     height: 48px;
     border-radius: 50%;
