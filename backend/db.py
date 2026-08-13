@@ -677,3 +677,27 @@ def add_card_to_board(conn, board_id: int, card_id: str):
 
 def remove_card_from_board(conn, board_id: int, card_id: str):
     conn.execute("DELETE FROM wishlist_board_cards WHERE board_id = ? AND card_id = ?", (board_id, card_id))
+
+
+def purge_unlisted_sets(conn, valid_set_ids: list):
+    """
+    Rimuove dal database tutti i set (e le relative carte e riferimenti)
+    che non fanno parte della lista ufficiale in 'valid_set_ids'.
+    """
+    if not valid_set_ids:
+        return
+        
+    placeholders = ",".join(["?"] * len(valid_set_ids))
+    
+    queries = [
+        f"DELETE FROM collection WHERE card_id IN (SELECT id FROM cards WHERE set_id NOT IN ({placeholders}))",
+        f"DELETE FROM wishlist WHERE card_id IN (SELECT id FROM cards WHERE set_id NOT IN ({placeholders}))",
+        f"DELETE FROM wishlist_board_cards WHERE card_id IN (SELECT id FROM cards WHERE set_id NOT IN ({placeholders}))",
+        f"DELETE FROM binder_slots WHERE card_id IN (SELECT id FROM cards WHERE set_id NOT IN ({placeholders}))",
+        f"DELETE FROM cards WHERE set_id NOT IN ({placeholders})",
+        f"DELETE FROM favorite_sets WHERE set_id NOT IN ({placeholders})",
+        f"DELETE FROM sets WHERE id NOT IN ({placeholders})"
+    ]
+    
+    for q in queries:
+        conn.execute(q, valid_set_ids)

@@ -441,8 +441,14 @@ def api_list_sets():
         return jsonify({"error": f"Error contacting the API: {e}"}), 502
 
     with db.get_conn() as conn:
+        valid_ids = []
         for raw in raw_sets:
+            valid_ids.append(raw["id"])
             db.upsert_set(conn, pokemon_api.normalize_set(raw))
+            
+        if valid_ids:
+            db.purge_unlisted_sets(conn, valid_ids)
+
         rows = db.get_all_sets(conn, user_id)
         start_background_preload()
         return jsonify([dict(r) for r in rows])
@@ -463,8 +469,14 @@ def api_refresh_sets():
         return jsonify({"error": f"Error contacting the API: {e}"}), 502
 
     with db.get_conn() as conn:
+        valid_ids = []
         for raw in raw_sets:
+            valid_ids.append(raw["id"])
             db.upsert_set(conn, pokemon_api.normalize_set(raw))
+            
+        if valid_ids:
+            db.purge_unlisted_sets(conn, valid_ids)
+
         rows = db.get_all_sets(conn, session["user_id"])
         start_background_preload()
         return jsonify([dict(r) for r in rows])
