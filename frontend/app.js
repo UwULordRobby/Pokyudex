@@ -265,6 +265,10 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   let color = input.value || defaultColor || '#4f8bf9';
   let hsl = hexToHsl(color);
   
+  if (hsl.l < 15 || hsl.l > 85) {
+    hsl.l = 50;
+  }
+
   container.className = 'custom-color-picker-container';
   container.innerHTML = `
     <div class="color-swatch-btn" style="background-color: ${color}"></div>
@@ -323,10 +327,11 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     });
     dropdown.classList.toggle('active');
     
-    // Imposta la luminosità al 50% *ogni volta* che si apre
     if (dropdown.classList.contains('active')) {
-      hsl.l = 50; 
-      lightSlider.value = 50;
+      if (hsl.l < 15 || hsl.l > 85) {
+        hsl.l = 50; 
+        lightSlider.value = 50;
+      }
       updateMarkerPosition(hsl.h, hsl.s);
       updateColor();
       renderSavedColors();
@@ -342,6 +347,7 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     });
   }
 
+  // Risolve il bug del click pass-through: nasconde il dropdown SOLO sul click
   if (backdrop) {
     const closeDropdown = (e) => {
       e.preventDefault();
@@ -350,12 +356,15 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
       dropdown.classList.remove('expanded');
       sizeToggleBtn.textContent = '⤢';
     };
-    backdrop.addEventListener('mousedown', closeDropdown);
-    backdrop.addEventListener('touchstart', closeDropdown, { passive: false });
+    // Utilizziamo solo "click" in modo che l'elemento non scompaia prima del "mouseup"
+    // Questo previene che il vero click finale cada sulla modale sottostante (chiudendola).
     backdrop.addEventListener('click', closeDropdown);
   }
 
+  // Previeni bubbling
   dropdown.addEventListener('click', (e) => { e.stopPropagation(); });
+  dropdown.addEventListener('mousedown', (e) => { e.stopPropagation(); });
+  dropdown.addEventListener('touchstart', (e) => { e.stopPropagation(); }, { passive: true });
 
   function updateMarkerPosition(h, s) {
     let currentWidth = wheel.offsetWidth;
@@ -414,6 +423,12 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   wheel.addEventListener('pointerdown', (e) => {
     isDraggingWheel = true;
     wheel.setPointerCapture(e.pointerId);
+    
+    if (hsl.l < 15 || hsl.l > 85) {
+      hsl.l = 50;
+      lightSlider.value = 50;
+    }
+    
     handleWheelEvent(e);
   });
 
@@ -670,7 +685,7 @@ function initScrollToTopButton() {
   btn.title = 'Torna in alto';
   btn.style.cssText = `
     position: fixed;
-    bottom: 24px; 
+    bottom: 24px; /* Spostato più in basso come richiesto */
     right: 24px;  
     width: 48px;
     height: 48px;
