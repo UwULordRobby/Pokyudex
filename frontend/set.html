@@ -394,7 +394,11 @@
         document.getElementById('set-name').textContent = data.set.name;
         document.getElementById('set-series').textContent = [data.set.series, data.set.release_date].filter(Boolean).join(' · ');
       }
-      allCards = data.cards;
+      // Fix: Aggiungiamo il nome del set alle carte per la visualizzazione corretta della modale
+      allCards = data.cards.map(c => {
+        c.set_name = data.set ? data.set.name : 'Unknown set';
+        return c;
+      });
       populateTypeSelect(allCards);
       const sortedRarities = (data.available_rarities || []).sort((a, b) => {
         let indexA = RARITY_ORDER.findIndex(r => r.toLowerCase() === a.toLowerCase());

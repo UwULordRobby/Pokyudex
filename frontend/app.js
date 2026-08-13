@@ -264,10 +264,6 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   if (!input) return null;
   let color = input.value || defaultColor || '#4f8bf9';
   let hsl = hexToHsl(color);
-  
-  if (hsl.l < 15 || hsl.l > 85) {
-    hsl.l = 50;
-  }
 
   container.className = 'custom-color-picker-container';
   container.innerHTML = `
@@ -347,7 +343,6 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     });
   }
 
-  // Risolve il bug del click pass-through: nasconde il dropdown SOLO sul click
   if (backdrop) {
     const closeDropdown = (e) => {
       e.preventDefault();
@@ -356,12 +351,9 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
       dropdown.classList.remove('expanded');
       sizeToggleBtn.textContent = '⤢';
     };
-    // Utilizziamo solo "click" in modo che l'elemento non scompaia prima del "mouseup"
-    // Questo previene che il vero click finale cada sulla modale sottostante (chiudendola).
     backdrop.addEventListener('click', closeDropdown);
   }
 
-  // Previeni bubbling
   dropdown.addEventListener('click', (e) => { e.stopPropagation(); });
   dropdown.addEventListener('mousedown', (e) => { e.stopPropagation(); });
   dropdown.addEventListener('touchstart', (e) => { e.stopPropagation(); }, { passive: true });
@@ -561,7 +553,9 @@ function initGlobalCardModal() {
 
         <div class="modal-card-info" style="text-align:center; margin-top:24px; pointer-events:none;">
           <div class="global-modal-name" style="font-family:'Rajdhani',sans-serif; font-size:26px; font-weight:700; color:#ece8e2;"></div>
-          <div class="global-modal-price" style="font-family:'JetBrains Mono',monospace; color:#f0b93d; font-size:16px; margin-top:6px;"></div>
+          <div class="global-modal-set" style="font-family:'JetBrains Mono',monospace; color:var(--teal); font-size:14px; margin-top:4px;"></div>
+          <div class="global-modal-rarity" style="font-family:'JetBrains Mono',monospace; color:var(--text-muted); font-size:12px; margin-top:2px;"></div>
+          <div class="global-modal-price" style="font-family:'JetBrains Mono',monospace; color:#f0b93d; font-size:16px; margin-top:8px;"></div>
         </div>
       </div>
     </div>
@@ -653,9 +647,24 @@ function initGlobalCardModal() {
     
     const imgTarget = imageUrl || card.image_large || card.image_small || '';
     const priceTarget = priceLabel || (card.price_market ? formatPrice(card.price_market, card.currency) : 'n/a');
+    const setTarget = card.set_name || (card.set && card.set.name) || '';
+    const rarityTarget = rarityStr || card.rarity || '';
 
     document.querySelector('.global-modal-img').src = imgTarget;
     document.querySelector('.global-modal-name').textContent = card.name || cardOrName || 'Custom Divider / Artwork';
+    
+    const setEl = document.querySelector('.global-modal-set');
+    if (setEl) {
+      setEl.textContent = setTarget;
+      setEl.style.display = setTarget ? 'block' : 'none';
+    }
+
+    const rarityEl = document.querySelector('.global-modal-rarity');
+    if (rarityEl) {
+      rarityEl.textContent = rarityTarget;
+      rarityEl.style.display = rarityTarget ? 'block' : 'none';
+    }
+
     document.querySelector('.global-modal-price').textContent = priceTarget;
 
     const transformContainer = modal.querySelector('.global-card-transform-container');
@@ -685,7 +694,7 @@ function initScrollToTopButton() {
   btn.title = 'Torna in alto';
   btn.style.cssText = `
     position: fixed;
-    bottom: 24px; /* Spostato più in basso come richiesto */
+    bottom: 24px; 
     right: 24px;  
     width: 48px;
     height: 48px;
