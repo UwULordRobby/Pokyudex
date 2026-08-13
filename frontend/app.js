@@ -323,11 +323,10 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     });
     dropdown.classList.toggle('active');
     
+    // Forza SEMPRE la luminosità a 50 quando apri il color picker
     if (dropdown.classList.contains('active')) {
-      if (hsl.l < 15 || hsl.l > 85) {
-        hsl.l = 50; 
-        lightSlider.value = 50;
-      }
+      hsl.l = 50; 
+      lightSlider.value = 50;
       updateMarkerPosition(hsl.h, hsl.s);
       updateColor();
       renderSavedColors();
@@ -351,6 +350,8 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
       dropdown.classList.remove('expanded');
       sizeToggleBtn.textContent = '⤢';
     };
+    backdrop.addEventListener('mousedown', closeDropdown);
+    backdrop.addEventListener('touchstart', closeDropdown, { passive: false });
     backdrop.addEventListener('click', closeDropdown);
   }
 
@@ -416,10 +417,9 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     isDraggingWheel = true;
     wheel.setPointerCapture(e.pointerId);
     
-    if (hsl.l < 15 || hsl.l > 85) {
-      hsl.l = 50;
-      lightSlider.value = 50;
-    }
+    // Forza sempre luminosità a 50 quando clicchi la ruota
+    hsl.l = 50;
+    lightSlider.value = 50;
     
     handleWheelEvent(e);
   });
@@ -553,7 +553,7 @@ function initGlobalCardModal() {
 
         <div class="modal-card-info" style="text-align:center; margin-top:24px; pointer-events:none;">
           <div class="global-modal-name" style="font-family:'Rajdhani',sans-serif; font-size:26px; font-weight:700; color:#ece8e2;"></div>
-          <div class="global-modal-set" style="font-family:'JetBrains Mono',monospace; color:var(--teal); font-size:14px; margin-top:4px;"></div>
+          <div class="global-modal-set" style="font-family:'JetBrains Mono',monospace; color:var(--teal); font-size:14px; margin-top:4px; display:inline-block; transition: color 0.2s ease;"></div>
           <div class="global-modal-rarity" style="font-family:'JetBrains Mono',monospace; color:var(--text-muted); font-size:12px; margin-top:2px;"></div>
           <div class="global-modal-price" style="font-family:'JetBrains Mono',monospace; color:#f0b93d; font-size:16px; margin-top:8px;"></div>
         </div>
@@ -648,6 +648,7 @@ function initGlobalCardModal() {
     const imgTarget = imageUrl || card.image_large || card.image_small || '';
     const priceTarget = priceLabel || (card.price_market ? formatPrice(card.price_market, card.currency) : 'n/a');
     const setTarget = card.set_name || (card.set && card.set.name) || '';
+    const setIdTarget = card.set_id || (card.set && card.set.id) || '';
     const rarityTarget = rarityStr || card.rarity || '';
 
     document.querySelector('.global-modal-img').src = imgTarget;
@@ -656,7 +657,24 @@ function initGlobalCardModal() {
     const setEl = document.querySelector('.global-modal-set');
     if (setEl) {
       setEl.textContent = setTarget;
-      setEl.style.display = setTarget ? 'block' : 'none';
+      setEl.style.display = setTarget ? 'inline-block' : 'none';
+      setEl.style.pointerEvents = 'auto'; // Rende cliccabile il set nonostante pointer-events: none del contenitore padre
+      
+      if (setIdTarget && card.id) {
+        setEl.style.cursor = 'pointer';
+        setEl.onmouseover = () => { setEl.style.textDecoration = 'underline'; };
+        setEl.onmouseout = () => { setEl.style.textDecoration = 'none'; };
+        setEl.onclick = (e) => {
+          e.stopPropagation();
+          window.location.href = `set.html?id=${encodeURIComponent(setIdTarget)}&focus=${encodeURIComponent(card.id)}`;
+        };
+      } else {
+        setEl.style.cursor = 'default';
+        setEl.style.textDecoration = 'none';
+        setEl.onmouseover = null;
+        setEl.onmouseout = null;
+        setEl.onclick = null;
+      }
     }
 
     const rarityEl = document.querySelector('.global-modal-rarity');
