@@ -557,7 +557,7 @@ def delete_binder(conn, binder_id: int, user_id: int):
 
 def get_binder_slots(conn, binder_id: int):
     return conn.execute(
-        """SELECT binder_slots.*, cards.name, cards.image_small, cards.image_large, cards.price_market, cards.currency, cards.rarity, sets.name AS set_name
+        """SELECT binder_slots.*, cards.name, cards.image_small, cards.image_large, cards.price_market, cards.currency, cards.rarity, cards.set_id, sets.name AS set_name
            FROM binder_slots
            LEFT JOIN cards ON binder_slots.card_id = cards.id
            LEFT JOIN sets ON cards.set_id = sets.id

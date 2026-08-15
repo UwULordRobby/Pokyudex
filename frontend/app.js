@@ -266,48 +266,50 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   let hsl = hexToHsl(color);
 
   container.className = 'custom-color-picker-container';
-  container.innerHTML = `
-    <div class="color-swatch-btn" style="background-color: ${color}"></div>
-    <div class="color-picker-dropdown">
-      <div class="color-picker-backdrop"></div>
-      <button class="cp-size-toggle-btn" title="Toggle Full Page" type="button">⤢</button>
-      <div class="color-picker-wheel-zone">
-        <div class="color-wheel">
-          <div class="color-wheel-saturation"></div>
-          <div class="color-wheel-lightness"></div>
-          <div class="color-wheel-marker"></div>
-        </div>
-      </div>
-      <div class="slider-group" style="margin-top: 14px;">
-        <label>Lightness: <span class="l-val">${hsl.l}%</span></label>
-        <input type="range" class="cp-light" min="0" max="100" value="${hsl.l}">
-      </div>
-      <input type="text" class="color-picker-live-preview" value="${color.toUpperCase()}" maxlength="7" style="background-color: ${color}; color: ${hsl.l > 50 ? '#121118' : '#ece8e2'}">
-      
-      <button type="button" class="btn btn-accent cp-done-btn" style="width: 100%; margin-top: 12px; font-size: 13px; height: 34px;">SAVE / DONE</button>
-      
-      <div class="color-picker-saved-container">
-        <div class="color-picker-saved-headline">
-          <span>Saved Colors</span>
-          <a class="save-current-color-btn" style="color:var(--teal); cursor:pointer; font-size:10px;">+ Save Current</a>
-        </div>
-        <div class="color-picker-saved-slots"></div>
+  container.innerHTML = `<div class="color-swatch-btn" style="background-color: ${color}"></div>`;
+  const swatchBtn = container.querySelector('.color-swatch-btn');
+
+  // CREIAMO IL DROPDOWN E LO AGGIUNGIAMO AL BODY (isolandolo dalla finestra modale genitore)
+  const dropdown = document.createElement('div');
+  dropdown.className = 'color-picker-dropdown';
+  dropdown.innerHTML = `
+    <div class="color-picker-backdrop"></div>
+    <button class="cp-size-toggle-btn" title="Toggle Full Page" type="button">⤢</button>
+    <div class="color-picker-wheel-zone">
+      <div class="color-wheel">
+        <div class="color-wheel-saturation"></div>
+        <div class="color-wheel-lightness"></div>
+        <div class="color-wheel-marker"></div>
       </div>
     </div>
+    <div class="slider-group" style="margin-top: 14px;">
+      <label>Lightness: <span class="l-val">${hsl.l}%</span></label>
+      <input type="range" class="cp-light" min="0" max="100" value="${hsl.l}">
+    </div>
+    <input type="text" class="color-picker-live-preview" value="${color.toUpperCase()}" maxlength="7" style="background-color: ${color}; color: ${hsl.l > 50 ? '#121118' : '#ece8e2'}">
+    
+    <button type="button" class="btn btn-accent cp-done-btn" style="width: 100%; margin-top: 12px; font-size: 13px; height: 34px;">SAVE / DONE</button>
+    
+    <div class="color-picker-saved-container">
+      <div class="color-picker-saved-headline">
+        <span>Saved Colors</span>
+        <a class="save-current-color-btn" style="color:var(--teal); cursor:pointer; font-size:10px;">+ Save Current</a>
+      </div>
+      <div class="color-picker-saved-slots"></div>
+    </div>
   `;
+  document.body.appendChild(dropdown);
 
-  const swatchBtn = container.querySelector('.color-swatch-btn');
-  const dropdown = container.querySelector('.color-picker-dropdown');
-  const backdrop = container.querySelector('.color-picker-backdrop');
-  const wheel = container.querySelector('.color-wheel');
-  const marker = container.querySelector('.color-wheel-marker');
-  const lightSlider = container.querySelector('.cp-light');
-  const lValSpan = container.querySelector('.l-val');
-  const livePreviewInput = container.querySelector('.color-picker-live-preview');
-  const savedSlotsContainer = container.querySelector('.color-picker-saved-slots');
-  const saveBtn = container.querySelector('.save-current-color-btn');
-  const sizeToggleBtn = container.querySelector('.cp-size-toggle-btn');
-  const doneBtn = container.querySelector('.cp-done-btn');
+  const backdrop = dropdown.querySelector('.color-picker-backdrop');
+  const wheel = dropdown.querySelector('.color-wheel');
+  const marker = dropdown.querySelector('.color-wheel-marker');
+  const lightSlider = dropdown.querySelector('.cp-light');
+  const lValSpan = dropdown.querySelector('.l-val');
+  const livePreviewInput = dropdown.querySelector('.color-picker-live-preview');
+  const savedSlotsContainer = dropdown.querySelector('.color-picker-saved-slots');
+  const saveBtn = dropdown.querySelector('.save-current-color-btn');
+  const sizeToggleBtn = dropdown.querySelector('.cp-size-toggle-btn');
+  const doneBtn = dropdown.querySelector('.cp-done-btn');
 
   let isDraggingWheel = false;
 
@@ -315,15 +317,14 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     e.stopPropagation();
     document.querySelectorAll('.color-picker-dropdown.active').forEach(d => {
       if (d !== dropdown) {
-        d.classList.remove('active');
-        d.classList.remove('expanded');
+        d.classList.remove('active', 'expanded');
         const tg = d.querySelector('.cp-size-toggle-btn');
         if (tg) tg.textContent = '⤢';
       }
     });
+    
     dropdown.classList.toggle('active');
     
-    // Forza SEMPRE la luminosità a 50 quando apri il color picker
     if (dropdown.classList.contains('active')) {
       hsl.l = 50; 
       lightSlider.value = 50;
@@ -336,18 +337,17 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   if (doneBtn) {
     doneBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      dropdown.classList.remove('active');
-      dropdown.classList.remove('expanded');
+      dropdown.classList.remove('active', 'expanded');
       sizeToggleBtn.textContent = '⤢';
     });
   }
 
+  // Cliccare il backdrop chiude SOLO il color picker e muore lì. Non arriva al modal genitore!
   if (backdrop) {
     const closeDropdown = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      dropdown.classList.remove('active');
-      dropdown.classList.remove('expanded');
+      dropdown.classList.remove('active', 'expanded');
       sizeToggleBtn.textContent = '⤢';
     };
     backdrop.addEventListener('mousedown', closeDropdown);
@@ -417,7 +417,6 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     isDraggingWheel = true;
     wheel.setPointerCapture(e.pointerId);
     
-    // Forza sempre luminosità a 50 quando clicchi la ruota
     hsl.l = 50;
     lightSlider.value = 50;
     
