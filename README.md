@@ -1,98 +1,74 @@
 # Pokyudex
 
-A personal web application for browsing Pokémon TCG expansions and quickly viewing all the cards in each set, sorted by price from highest to lowest, with rarity filters such as **Illustration Rare**, **Special Illustration Rare**, and more.
+Pokyudex is a personal web application for browsing Pokémon TCG expansions and viewing all the cards in each set.
 
-## Features
+Cards are displayed with their images, rarity, and available market price, and can be sorted by price and filtered by rarity such as **Illustration Rare** and **Special Illustration Rare**.
 
-* Browse Pokémon TCG expansions.
-* View all cards contained in a set.
-* Sort cards by price, from highest to lowest.
-* Filter cards by rarity.
-* Display card images and pricing information.
-* Use **CardMarket prices in EUR** whenever available.
-* Fall back to **TCGPlayer prices in USD** when CardMarket data is unavailable.
-* Store downloaded sets locally using **SQLite**.
-* Avoid unnecessary API requests by caching downloaded data locally.
-* Manually update prices for previously downloaded sets.
+The application uses the [Pokémon TCG API](https://docs.pokemontcg.io/) to retrieve card and pricing information and stores downloaded data in a local SQLite database for faster subsequent access.
 
 ## Motivation
 
-Pokyudex was created as a personal project to make browsing and tracking Pokémon TCG cards easier.
+The goal of Pokyudex is to provide a simple and fast way to browse Pokémon TCG expansions and immediately identify the most valuable cards in a set.
 
-The main goal is to have a simple interface where it is possible to open an expansion and immediately see which cards are the most valuable, without having to manually check individual cards or external websites.
+Instead of making external API requests every time a set is opened, Pokyudex downloads the cards the first time they are requested and stores them locally in a SQLite database.
 
-The application also uses a local database to reduce the number of external API requests and make subsequent visits to already downloaded sets much faster.
+This provides two main advantages:
 
-## How It Works
+* Faster loading when revisiting previously downloaded sets.
+* Fewer requests to the external API.
 
-Pokyudex uses the [Pokémon TCG API](https://docs.pokemontcg.io/) to retrieve card, set, image, rarity, and pricing information.
-
-When a set is opened for the first time:
-
-1. Pokyudex requests the set's cards from the Pokémon TCG API.
-2. The cards and their relevant information are stored in a local SQLite database.
-3. The application displays the cards using the locally stored data.
-
-When the same set is opened again, the application reads the data directly from SQLite instead of making new API requests.
-
-This makes subsequent visits significantly faster and reduces unnecessary requests to the external API.
-
-Prices can be manually refreshed using the **"Update Prices"** button on the set page.
-
-### Pricing Data
-
-Prices are provided by the Pokémon TCG API and are based on:
-
-* **CardMarket (EUR)** when available.
-* **TCGPlayer (USD)** as a fallback.
-
-Prices are updated by the respective services approximately once per day. They are therefore **not real-time prices**, but they provide a free and convenient way to track card values without requiring a paid pricing API or managing API credits.
+The project was also created as a personal programming project to experiment with **Python, Flask, SQLite, APIs, and frontend web development**.
 
 ## Quick Start
 
-### 1. Clone the repository
+### Requirements
+
+* Python 3
+* pip
+* Internet connection
+* A Pokémon TCG API key is recommended but optional
+
+### Installation
+
+Clone the repository and enter the project directory:
 
 ```bash
 git clone <repository-url>
 cd pokemon-tracker
 ```
 
-### 2. Create a virtual environment
-
-It is recommended to use a Python virtual environment.
+Create a Python virtual environment:
 
 ```bash
 cd backend
 python3 -m venv venv
 ```
 
-Activate it with:
+Activate the virtual environment.
 
-**Linux / macOS**
+**Linux / macOS:**
 
 ```bash
 source venv/bin/activate
 ```
 
-**Windows**
+**Windows:**
 
 ```bash
 venv\Scripts\activate
 ```
 
-### 3. Install dependencies
+Install the required dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure the API key
+### API Key
 
-An API key is optional.
+An API key is optional. The application works without one, but the Pokémon TCG API has lower request limits when no key is provided.
 
-Without a key, Pokyudex still works, but the Pokémon TCG API has significantly lower request limits.
-
-For regular use, you can get a free API key from the [Pokémon TCG Developer Portal](https://dev.pokemontcg.io/).
+For regular use, a free API key can be obtained from the [Pokémon TCG Developer Portal](https://dev.pokemontcg.io/).
 
 From the project root:
 
@@ -107,16 +83,18 @@ Then add your API key to `.env`:
 POKEMONTCG_API_KEY=your_api_key_here
 ```
 
-If you leave it empty, the application will still work.
+The application will still work if the key is left empty.
 
-### 5. Start the server
+### Start the Application
+
+Run the Flask server:
 
 ```bash
 cd backend
 python app.py
 ```
 
-The application will be available at:
+Then open:
 
 ```text
 http://localhost:5000
@@ -124,29 +102,48 @@ http://localhost:5000
 
 ## Usage
 
-Once the server is running, open `http://localhost:5000` in your browser.
+After starting the application, open it in a web browser and select a Pokémon TCG expansion.
 
-From the main page you can:
+For each expansion, Pokyudex allows you to:
 
-1. Select a Pokémon TCG expansion.
-2. Browse all cards in the set.
-3. Sort cards by price.
-4. Filter cards by rarity.
-5. Refresh prices using the **"Update Prices"** button.
+* View all cards in the set.
+* Sort cards by price from highest to lowest.
+* Filter cards by rarity.
+* View card images and pricing information.
+* Update prices for an already downloaded set.
 
-### Local Database
+### Data and Caching
 
-The SQLite database is created automatically when the application is first started:
+When an expansion is opened for the first time, Pokyudex downloads its cards from the Pokémon TCG API and stores them in:
 
 ```text
 data/pokemon.db
 ```
 
-Downloaded sets are stored locally, so opening the same set again does not require another API request.
+The database is created automatically.
 
-## Hosting on a Local Server
+When the same expansion is opened again, the application loads the data from the local database instead of making new API requests.
 
-The Flask server is already configured to listen on `0.0.0.0`, making it accessible from other devices on the same local network.
+To update prices for an existing set, use the **Update Prices** button on the set page.
+
+### Pricing
+
+Pokyudex uses the pricing information provided through the Pokémon TCG API.
+
+The price priority is:
+
+1. **CardMarket** — EUR
+2. **TCGPlayer** — USD
+
+If CardMarket pricing is unavailable for a card, TCGPlayer pricing is used instead.
+
+Prices are not real-time. The pricing data is generally updated approximately once per day by the respective services.
+
+Some cards may not have available pricing information. In these cases, the application displays `N/A`.
+
+## Hosting
+
+The Flask server listens on `0.0.0.0`, allowing the application to be accessed from other devices on the same local network.
 
 For example:
 
@@ -154,9 +151,7 @@ For example:
 http://SERVER-IP:5000
 ```
 
-For a more reliable deployment on Linux, **Gunicorn** and **systemd** can be used to automatically start and restart the application.
-
-### Gunicorn
+For a more stable Linux deployment, Gunicorn can be used together with systemd.
 
 Install Gunicorn:
 
@@ -164,15 +159,13 @@ Install Gunicorn:
 pip install gunicorn
 ```
 
-Then start the application with:
+Start the application:
 
 ```bash
 gunicorn -w 2 -b 0.0.0.0:5000 app:app
 ```
 
-### systemd
-
-Example service file:
+Example systemd service:
 
 ```ini
 [Unit]
@@ -189,13 +182,13 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
-Save it as:
+Save the service as:
 
 ```text
 /etc/systemd/system/pokyudex.service
 ```
 
-Then enable and start the service:
+Then enable and start it:
 
 ```bash
 sudo systemctl enable --now pokyudex
@@ -222,43 +215,33 @@ pokemon-tracker/
     └── style.css
 ```
 
-## Price Information
+## Contributing
 
-Each card displays its available price using the following priority:
+Contributions are welcome.
 
-1. **CardMarket — EUR**
-2. **TCGPlayer — USD**
+If you would like to contribute to Pokyudex:
 
-The currency symbol is displayed according to the source used for each card.
+1. Fork the repository.
+2. Create a new branch for your changes.
+3. Make your changes and test them locally.
+4. Commit your changes with a clear commit message.
+5. Open a Pull Request describing what you changed.
 
-Some very new or niche cards may not have pricing information yet. In those cases, Pokyudex displays:
+When contributing, please try to keep the existing project structure and coding style consistent.
 
-```text
-N/A
-```
-
-### Future Pricing Improvements
-
-For more accurate or frequently updated pricing data, a paid API could be integrated in the future, potentially providing:
-
-* Near-real-time prices.
-* Historical price data.
-* eBay pricing information.
-* Additional marketplaces.
-
-The API integration is intentionally isolated in `pokemon_api.py`, making it possible to replace the pricing provider without significantly modifying the rest of the application.
+If the Pokémon TCG API changes its response format, the API-related normalization logic can be found in `backend/pokemon_api.py`, particularly in the `normalize_set` and `normalize_card` functions.
 
 ## Future Improvements
 
-Possible future additions include:
+Some features that could be added in the future include:
 
-* [ ] Automatic scheduled price updates using cron or another scheduler.
-* [ ] A **Favorites** page for frequently viewed sets.
-* [ ] User-defined collections or card tracking.
-* [ ] Price history charts.
-* [ ] More detailed card filtering.
-* [ ] Additional pricing sources.
-* [ ] Improved handling of changes to the Pokémon TCG API response format.
+* Automatic scheduled price updates.
+* A favorites page for frequently viewed sets.
+* User card collections.
+* Price history and charts.
+* More advanced card filtering.
+* Additional pricing sources.
+* Near-real-time pricing through alternative APIs.
 
 ## Disclaimer
 
