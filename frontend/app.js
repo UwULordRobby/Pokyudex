@@ -264,106 +264,107 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   if (!input) return null;
   let color = input.value || defaultColor || '#4f8bf9';
   let hsl = hexToHsl(color);
+  let originalColor = color; 
 
   container.className = 'custom-color-picker-container';
   container.innerHTML = `<div class="color-swatch-btn" style="background-color: ${color}"></div>`;
   const swatchBtn = container.querySelector('.color-swatch-btn');
 
-  // CREIAMO IL DROPDOWN E LO AGGIUNGIAMO AL BODY (isolandolo dalla finestra modale genitore)
-  const dropdown = document.createElement('div');
-  dropdown.className = 'color-picker-dropdown';
-  dropdown.innerHTML = `
-    <div class="color-picker-backdrop"></div>
-    <button class="cp-size-toggle-btn" title="Toggle Full Page" type="button">⤢</button>
-    <div class="color-picker-wheel-zone">
-      <div class="color-wheel">
-        <div class="color-wheel-saturation"></div>
-        <div class="color-wheel-lightness"></div>
-        <div class="color-wheel-marker"></div>
+  // STRUTTURA DEFINITIVA DELLA MODALE (Centro perfetto, nessun conflitto CSS, annullamento ok)
+  const modalWrapper = document.createElement('div');
+  modalWrapper.className = 'color-picker-modal-wrapper';
+  modalWrapper.style.cssText = 'display:none; position:fixed; inset:0; z-index:100000; align-items:center; justify-content:center; background:rgba(8,7,12,0.8); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);';
+  
+  modalWrapper.innerHTML = `
+    <div class="color-picker-backdrop" style="position:absolute; inset:0; cursor:pointer;"></div>
+    <div class="color-picker-dialog" style="position:relative; z-index:1; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:24px; width:310px; max-width:90vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.8); animation:scaleUp 0.15s ease-out; display:flex; flex-direction:column;">
+      <button class="cp-size-toggle-btn" title="Toggle Full Page" type="button" style="position:absolute; top:12px; right:12px; background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:18px; padding:4px; z-index:5; transition:color 0.15s ease;">⤢</button>
+      
+      <div class="color-picker-wheel-zone" style="display:flex; justify-content:center; padding:12px 0 10px;">
+        <div class="color-wheel" style="position:relative; width:200px; height:200px; border-radius:50%; cursor:crosshair; box-shadow:0 4px 15px rgba(0,0,0,0.5), inset 0 0 10px rgba(0,0,0,0.3); touch-action:none; background:conic-gradient(from 0deg, hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%), hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%));">
+          <div class="color-wheel-saturation" style="position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle, #fff 0%, transparent 100%); pointer-events:none;"></div>
+          <div class="color-wheel-lightness" style="position:absolute; inset:0; border-radius:50%; pointer-events:none;"></div>
+          <div class="color-wheel-marker" style="position:absolute; width:16px; height:16px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 4px rgba(0,0,0,0.85); transform:translate(-50%, -50%); pointer-events:none;"></div>
+        </div>
       </div>
-    </div>
-    <div class="slider-group" style="margin-top: 14px;">
-      <label>Lightness: <span class="l-val">${hsl.l}%</span></label>
-      <input type="range" class="cp-light" min="0" max="100" value="${hsl.l}">
-    </div>
-    <input type="text" class="color-picker-live-preview" value="${color.toUpperCase()}" maxlength="7" style="background-color: ${color}; color: ${hsl.l > 50 ? '#121118' : '#ece8e2'}">
-    
-    <button type="button" class="btn btn-accent cp-done-btn" style="width: 100%; margin-top: 12px; font-size: 13px; height: 34px;">SAVE / DONE</button>
-    
-    <div class="color-picker-saved-container">
-      <div class="color-picker-saved-headline">
-        <span>Saved Colors</span>
-        <a class="save-current-color-btn" style="color:var(--teal); cursor:pointer; font-size:10px;">+ Save Current</a>
+      
+      <div class="slider-group" style="margin-top:16px;">
+        <label style="font-size:12px; font-family:'JetBrains Mono',monospace; color:var(--text-muted); display:flex; justify-content:space-between;">Lightness <span class="l-val">${hsl.l}%</span></label>
+        <input type="range" class="cp-light" min="0" max="100" value="${hsl.l}" style="width:100%; margin-top:8px;">
       </div>
-      <div class="color-picker-saved-slots"></div>
+      
+      <input type="text" class="color-picker-live-preview" value="${color.toUpperCase()}" maxlength="7" style="width:100%; padding:10px; text-align:center; font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:bold; border-radius:8px; margin-top:20px; border:1px solid var(--border); outline:none; background-color:${color}; color:${hsl.l > 50 ? '#121118' : '#ece8e2'}; text-shadow: 0 1px 2px rgba(0,0,0,0.15); transition:background-color 0.1s ease, color 0.1s ease;">
+      
+      <button type="button" class="btn btn-accent cp-done-btn" style="width:100%; margin-top:16px; height:40px; font-size:14px; font-weight:700;">SAVE & CLOSE</button>
+      
+      <div class="color-picker-saved-container" style="margin-top:20px; border-top:1px dashed var(--border); padding-top:14px;">
+        <div class="color-picker-saved-headline" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+          <span>Saved Colors</span>
+          <a class="save-current-color-btn" style="color:var(--teal); cursor:pointer; font-size:11px; font-weight:bold;">+ Save Current</a>
+        </div>
+        <div class="color-picker-saved-slots" style="display:grid; grid-template-columns:repeat(5, 1fr); gap:10px;"></div>
+      </div>
     </div>
   `;
-  document.body.appendChild(dropdown);
+  document.body.appendChild(modalWrapper);
 
-  const backdrop = dropdown.querySelector('.color-picker-backdrop');
-  const wheel = dropdown.querySelector('.color-wheel');
-  const marker = dropdown.querySelector('.color-wheel-marker');
-  const lightSlider = dropdown.querySelector('.cp-light');
-  const lValSpan = dropdown.querySelector('.l-val');
-  const livePreviewInput = dropdown.querySelector('.color-picker-live-preview');
-  const savedSlotsContainer = dropdown.querySelector('.color-picker-saved-slots');
-  const saveBtn = dropdown.querySelector('.save-current-color-btn');
-  const sizeToggleBtn = dropdown.querySelector('.cp-size-toggle-btn');
-  const doneBtn = dropdown.querySelector('.cp-done-btn');
+  const dialog = modalWrapper.querySelector('.color-picker-dialog');
+  const backdrop = modalWrapper.querySelector('.color-picker-backdrop');
+  const wheel = modalWrapper.querySelector('.color-wheel');
+  const marker = modalWrapper.querySelector('.color-wheel-marker');
+  const lightSlider = modalWrapper.querySelector('.cp-light');
+  const lValSpan = modalWrapper.querySelector('.l-val');
+  const livePreviewInput = modalWrapper.querySelector('.color-picker-live-preview');
+  const savedSlotsContainer = modalWrapper.querySelector('.color-picker-saved-slots');
+  const saveBtn = modalWrapper.querySelector('.save-current-color-btn');
+  const sizeToggleBtn = modalWrapper.querySelector('.cp-size-toggle-btn');
+  const doneBtn = modalWrapper.querySelector('.cp-done-btn');
 
   let isDraggingWheel = false;
 
+  // APERTURA: SALVIAMO IL COLORE INIZIALE
   swatchBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    document.querySelectorAll('.color-picker-dropdown.active').forEach(d => {
-      if (d !== dropdown) {
-        d.classList.remove('active', 'expanded');
-        const tg = d.querySelector('.cp-size-toggle-btn');
-        if (tg) tg.textContent = '⤢';
-      }
-    });
+    originalColor = input.value; 
+    document.querySelectorAll('.color-picker-modal-wrapper').forEach(w => w.style.display = 'none');
+    modalWrapper.style.display = 'flex';
     
-    dropdown.classList.toggle('active');
-    
-    if (dropdown.classList.contains('active')) {
-      hsl.l = 50; 
-      lightSlider.value = 50;
-      updateMarkerPosition(hsl.h, hsl.s);
-      updateColor();
-      renderSavedColors();
-    }
+    hsl.l = 50; 
+    lightSlider.value = 50;
+    updateMarkerPosition(hsl.h, hsl.s);
+    updateColor();
+    renderSavedColors();
   });
 
-  if (doneBtn) {
-    doneBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      dropdown.classList.remove('active', 'expanded');
-      sizeToggleBtn.textContent = '⤢';
-    });
-  }
+  // CHIUSURA: CONFERMIAMO IL COLORE
+  doneBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    modalWrapper.style.display = 'none';
+    dialog.style.width = '310px';
+    dialog.style.height = 'auto';
+    dialog.style.borderRadius = '12px';
+    sizeToggleBtn.textContent = '⤢';
+  });
 
-  // Cliccare il backdrop chiude SOLO il color picker e muore lì. Non arriva al modal genitore!
-  if (backdrop) {
-    const closeDropdown = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropdown.classList.remove('active', 'expanded');
-      sizeToggleBtn.textContent = '⤢';
-    };
-    backdrop.addEventListener('mousedown', closeDropdown);
-    backdrop.addEventListener('touchstart', closeDropdown, { passive: false });
-    backdrop.addEventListener('click', closeDropdown);
-  }
+  // ANNULLAMENTO: CLICCANDO FUORI, RIPRISTINIAMO IL COLORE INIZIALE
+  backdrop.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    pickerInstance.setValue(originalColor);
+    updateColor();
+    modalWrapper.style.display = 'none';
+    dialog.style.width = '310px';
+    dialog.style.height = 'auto';
+    dialog.style.borderRadius = '12px';
+    sizeToggleBtn.textContent = '⤢';
+  });
 
-  dropdown.addEventListener('click', (e) => { e.stopPropagation(); });
-  dropdown.addEventListener('mousedown', (e) => { e.stopPropagation(); });
-  dropdown.addEventListener('touchstart', (e) => { e.stopPropagation(); }, { passive: true });
+  dialog.addEventListener('click', (e) => e.stopPropagation());
+  dialog.addEventListener('mousedown', (e) => e.stopPropagation());
+  dialog.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
 
   function updateMarkerPosition(h, s) {
-    let currentWidth = wheel.offsetWidth;
-    if (currentWidth === 0) {
-      currentWidth = dropdown.classList.contains('expanded') ? Math.min(280, window.innerWidth * 0.7) : 180;
-    }
+    let currentWidth = wheel.offsetWidth || 200;
     const r = currentWidth / 2;
     const angleRad = (h - 90) * (Math.PI / 180);
     const dist = (s / 100) * r;
@@ -375,10 +376,26 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
 
   sizeToggleBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    dropdown.classList.toggle('expanded');
-    const isExpanded = dropdown.classList.contains('expanded');
-    sizeToggleBtn.textContent = isExpanded ? '✕' : '⤢';
-    setTimeout(() => { updateMarkerPosition(hsl.h, hsl.s); }, 10);
+    if (dialog.style.width === '100vw') {
+      dialog.style.width = '310px';
+      dialog.style.height = 'auto';
+      dialog.style.borderRadius = '12px';
+      dialog.style.justifyContent = 'flex-start';
+      sizeToggleBtn.textContent = '⤢';
+      wheel.style.width = '200px';
+      wheel.style.height = '200px';
+    } else {
+      dialog.style.width = '100vw';
+      dialog.style.height = '100vh';
+      dialog.style.borderRadius = '0';
+      dialog.style.justifyContent = 'center';
+      sizeToggleBtn.textContent = '✕';
+      wheel.style.width = '70vw';
+      wheel.style.height = '70vw';
+      wheel.style.maxWidth = '350px';
+      wheel.style.maxHeight = '350px';
+    }
+    setTimeout(() => updateMarkerPosition(hsl.h, hsl.s), 10);
   });
 
   livePreviewInput.addEventListener('change', () => {
@@ -416,10 +433,8 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   wheel.addEventListener('pointerdown', (e) => {
     isDraggingWheel = true;
     wheel.setPointerCapture(e.pointerId);
-    
     hsl.l = 50;
     lightSlider.value = 50;
-    
     handleWheelEvent(e);
   });
 
@@ -499,6 +514,9 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     e.stopPropagation();
     saveColorToHistory(input.value);
   });
+
+  sizeToggleBtn.addEventListener('mouseover', () => sizeToggleBtn.style.color = 'var(--gold)');
+  sizeToggleBtn.addEventListener('mouseout', () => sizeToggleBtn.style.color = 'var(--text-muted)');
 
   const pickerInstance = {
     setValue: function(hex) {
