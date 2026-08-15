@@ -380,7 +380,7 @@ def get_rarities_for_set(conn, set_id: str):
     return [r["rarity"] for r in rows]
 
 
-def search_cards_global(conn, name=None, rarity=None, pokedex_number=None, user_id=None, card_type=None):
+def search_cards_global(conn, name=None, rarity=None, pokedex_number=None, user_id=None, card_type=None, set_id=None):
     query = """
         SELECT cards.*, sets.name AS set_name, sets.release_date,
                (SELECT 1 FROM collection WHERE card_id = cards.id AND user_id = ?) AS is_owned,
@@ -402,6 +402,9 @@ def search_cards_global(conn, name=None, rarity=None, pokedex_number=None, user_
     if card_type:
         query += " AND (',' || cards.types || ',') LIKE ?"
         params.append(f"%,{card_type},%")
+    if set_id:
+        query += " AND cards.set_id = ?"
+        params.append(set_id)
 
     query += " ORDER BY sets.release_date DESC, cards.price_market IS NULL, cards.price_market DESC"
     return conn.execute(query, params).fetchall()

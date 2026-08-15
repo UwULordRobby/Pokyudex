@@ -544,6 +544,7 @@ def api_search_cards():
     rarity = request.args.get("rarity")
     pokedex_number = request.args.get("pokedex_number")
     card_type = request.args.get("type")
+    set_id = request.args.get("set_id")
 
     if pokedex_number and pokedex_number.strip():
         try:
@@ -554,7 +555,7 @@ def api_search_cards():
         pokedex_number = None
 
     with db.get_conn() as conn:
-        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type)
+        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type, set_id)
 
     if not cards:
         if pokedex_number:
@@ -568,7 +569,7 @@ def api_search_cards():
                             if s_id and not db.get_set(conn, s_id):
                                 db.upsert_set(conn, pokemon_api.normalize_set(raw.get("set", {})))
                             db.upsert_card(conn, pokemon_api.normalize_card(raw, s_id))
-                        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type)
+                        cards = db.search_cards_global(conn, name if name else None, rarity, pokedex_number, user_id, card_type, set_id)
             except Exception as e:
                 print(f"Dex fallback error: {e}")
 
@@ -583,7 +584,7 @@ def api_search_cards():
                             if s_id and not db.get_set(conn, s_id):
                                 db.upsert_set(conn, pokemon_api.normalize_set(raw.get("set", {})))
                             db.upsert_card(conn, pokemon_api.normalize_card(raw, s_id))
-                        cards = db.search_cards_global(conn, name, rarity, pokedex_number, user_id, card_type)
+                        cards = db.search_cards_global(conn, name, rarity, pokedex_number, user_id, card_type, set_id)
             except Exception as e:
                 print(f"Name fallback error: {e}")
 

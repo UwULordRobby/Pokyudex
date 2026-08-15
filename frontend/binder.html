@@ -468,6 +468,9 @@
       <div id="modal-database-fields" class="hide-on-upload" style="display: none;">
         <input type="text" class="search-bar" id="modal-card-search" placeholder="Type the Pokémon name..." style="max-width:100%; margin-top: 0; margin-bottom:10px;" />
         <div style="display:flex; flex-wrap: wrap; gap:10px; margin-bottom:16px;">
+          <select id="modal-set-select" class="search-bar" style="margin-top:0; width:auto; min-width:180px; max-width:250px; height:41px; padding:0 14px; text-overflow:ellipsis; white-space:nowrap; overflow:hidden;">
+            <option value="">-- Any Set --</option>
+          </select>
           <select id="modal-rarity-select" class="search-bar" style="margin-top:0; width:auto; min-width:180px; height:41px; padding:0 14px;">
             <option value="">-- Any Rarity --</option>
           </select>
@@ -1015,6 +1018,7 @@
       const q = document.getElementById('modal-card-search').value.trim();
       const rarity = document.getElementById('modal-rarity-select').value;
       const type = document.getElementById('modal-type-select').value;
+      const setId = document.getElementById('modal-set-select').value;
       const b = currentBinderData.binder;
       const container = document.getElementById('modal-results-container');
       
@@ -1025,14 +1029,15 @@
         url += `pokedex_number=${targetSlotNumber}`;
         if (q) url += `&name=${encodeURIComponent(q)}`;
       } else {
-        if (q.length < 2 && !rarity && !type) {
-          container.innerHTML = '<div class="state-msg">Type at least 2 letters, or pick a rarity/type, to search...</div>';
+        if (q.length < 2 && !rarity && !type && !setId) {
+          container.innerHTML = '<div class="state-msg">Type at least 2 letters, or pick a set/rarity/type, to search...</div>';
           return;
         }
         url += `name=${encodeURIComponent(q.length >= 2 ? q : '')}`;
       }
       if (rarity) url += `&rarity=${encodeURIComponent(rarity)}`;
       if (type) url += `&type=${encodeURIComponent(type)}`;
+      if (setId) url += `&set_id=${encodeURIComponent(setId)}`;
       
       try {
         const cards = await api(url);
@@ -1098,7 +1103,7 @@
       if (modalFiltersLoaded) return;
       modalFiltersLoaded = true;
       try {
-        const [rarities, types] = await Promise.all([api('/api/rarities'), api('/api/types')]);
+        const [rarities, types, setsData] = await Promise.all([api('/api/rarities'), api('/api/types'), api('/api/sets')]);
         const raritySelect = document.getElementById('modal-rarity-select');
         rarities.forEach(r => {
           const opt = document.createElement('option');
@@ -1111,10 +1116,17 @@
           opt.value = t; opt.textContent = t;
           typeSelect.appendChild(opt);
         });
-      } catch (err) { console.error('Failed to load rarity/type filters:', err); }
+        const setSelect = document.getElementById('modal-set-select');
+        setsData.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id; opt.textContent = s.name;
+          setSelect.appendChild(opt);
+        });
+      } catch (err) { console.error('Failed to load rarity/type/set filters:', err); }
     }
     document.getElementById('modal-rarity-select').addEventListener('change', execOverlaySearch);
     document.getElementById('modal-type-select').addEventListener('change', execOverlaySearch);
+    document.getElementById('modal-set-select').addEventListener('change', execOverlaySearch);
     document.getElementById('modal-database-sort-select').addEventListener('change', execOverlaySearch);
 
     async function loadOverlayCollection() {
