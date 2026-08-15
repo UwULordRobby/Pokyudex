@@ -982,7 +982,7 @@
 
     function addToSearchHistory(query) {
       const q = query.trim();
-      if (q.length < 2) return;
+      if (q.length < 1) return;
       
       let history = getSearchHistory();
       const newQuery = q.toLowerCase();
@@ -1029,11 +1029,11 @@
         url += `pokedex_number=${targetSlotNumber}`;
         if (q) url += `&name=${encodeURIComponent(q)}`;
       } else {
-        if (q.length < 2 && !rarity && !type && !setId) {
-          container.innerHTML = '<div class="state-msg">Type at least 2 letters, or pick a set/rarity/type, to search...</div>';
+        if (q.length < 1 && !rarity && !type && !setId) {
+          container.innerHTML = '<div class="state-msg">Type at least 1 letter, or pick a set/rarity/type, to search...</div>';
           return;
         }
-        url += `name=${encodeURIComponent(q.length >= 2 ? q : '')}`;
+        url += `name=${encodeURIComponent(q.length >= 1 ? q : '')}`;
       }
       if (rarity) url += `&rarity=${encodeURIComponent(rarity)}`;
       if (type) url += `&type=${encodeURIComponent(type)}`;
@@ -1047,7 +1047,7 @@
           return;
         }
 
-        if (q.length >= 2) { addToSearchHistory(q); }
+        if (q.length >= 1) { addToSearchHistory(q); }
 
         const criteria = document.getElementById('modal-database-sort-select').value;
         cards.sort((a, b) => {

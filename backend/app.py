@@ -573,7 +573,7 @@ def api_search_cards():
             except Exception as e:
                 print(f"Dex fallback error: {e}")
 
-        elif name and len(name) >= 2:
+        elif name and len(name) >= 1:
             print(f"[Search] Local database empty for '{name}'. Downloading live data...")
             try:
                 raw_cards = pokemon_api.fetch_cards_by_name(name)
