@@ -557,6 +557,9 @@ h1 {
 .add-to-board-btn:hover { border-color: var(--teal); color: var(--teal); }
 .add-to-board-btn.added { background: var(--teal); color: #0d211e; border-color: var(--teal); }
 
+/* ==========================================================================
+   COLOR PICKER STYLES (Completamente Riscritti e Puliti)
+   ========================================================================== */
 .custom-color-picker-container {
   position: relative;
   display: inline-block;
@@ -576,19 +579,69 @@ h1 {
   transform: scale(1.04);
 }
 
+.color-picker-modal-wrapper {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 7, 12, 0.8);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.color-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+
+.color-picker-dialog {
+  position: relative;
+  z-index: 1;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  width: 310px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+  animation: scaleUp 0.15s ease-out;
+  display: flex;
+  flex-direction: column;
+}
+
+.color-picker-dialog.expanded {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 0;
+  border: none;
+  justify-content: center;
+  padding: 40px 24px;
+}
+
 .color-picker-wheel-zone {
   display: flex;
   justify-content: center;
-  align-items: center;
-  padding: 8px 0 6px 0;
+  padding: 12px 0 10px;
+  flex-shrink: 0; /* IMPEDISCE ALLA RUOTA DI SCHIACCIARSI */
 }
 
 .color-wheel {
   position: relative;
-  width: 180px; 
-  height: 180px;
-  margin: 0 auto;
+  width: 200px;
+  height: 200px;
+  aspect-ratio: 1 / 1; /* MANTIENE IL CERCHIO PERFETTO */
   border-radius: 50%;
+  cursor: crosshair;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(0, 0, 0, 0.3);
+  touch-action: none;
+  flex-shrink: 0; /* IMPEDISCE ALLA RUOTA DI SCHIACCIARSI */
   background: conic-gradient(
     from 0deg,
     hsl(0, 100%, 50%),
@@ -599,9 +652,13 @@ h1 {
     hsl(300, 100%, 50%),
     hsl(360, 100%, 50%)
   );
-  cursor: crosshair;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(0, 0, 0, 0.3);
-  touch-action: none;
+}
+
+.color-picker-dialog.expanded .color-wheel {
+  width: 70vmin;
+  height: 70vmin;
+  max-width: 350px;
+  max-height: 350px;
 }
 
 .color-wheel-saturation {
@@ -609,20 +666,21 @@ h1 {
   inset: 0;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
 }
 
 .color-wheel-lightness {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: var(--cp-overlay, transparent);
   pointer-events: none;
+  background: var(--cp-overlay, transparent);
 }
 
 .color-wheel-marker {
   position: absolute;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   border: 2px solid #ffffff;
   background: transparent;
@@ -632,21 +690,46 @@ h1 {
   will-change: left, top;
 }
 
-.cp-light {
+.cp-size-toggle-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+  z-index: 5;
+  transition: color 0.15s ease;
+}
+.cp-size-toggle-btn:hover { color: var(--gold); }
+
+.color-picker-dialog .slider-group {
+  margin-top: 16px;
+  flex-shrink: 0;
+}
+.color-picker-dialog .slider-group label {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+}
+.color-picker-dialog .cp-light {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
   background: transparent;
   outline: none;
+  margin-top: 8px;
 }
-
-.cp-light::-webkit-slider-runnable-track {
+.color-picker-dialog .cp-light::-webkit-slider-runnable-track {
   background: linear-gradient(to right, #000000, #ffffff);
   height: 6px;
   border-radius: 3px;
 }
-
-.cp-light::-webkit-slider-thumb {
+.color-picker-dialog .cp-light::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 16px;
@@ -659,151 +742,61 @@ h1 {
   cursor: pointer;
 }
 
-.color-picker-dropdown {
-  display: none;
-  position: absolute; /* Ora è assoluto, non esce fuori in modo anomalo se in linea */
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 24px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
-  z-index: 100000; 
-  width: 290px;
-  max-width: 90vw;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.color-picker-dropdown.active {
-  display: block;
-  animation: fadeIn 0.15s ease-out;
-}
-
-.color-picker-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(8, 7, 12, 0.7);
-  z-index: -1;
-  cursor: default;
-}
-
 .color-picker-live-preview {
   width: 100%;
-  padding: 8px;
+  padding: 10px;
   text-align: center;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: bold;
-  border-radius: 6px;
-  margin-top: 10px;
-  transition: background-color 0.1s ease, color 0.1s ease;
+  border-radius: 8px;
+  margin-top: 20px;
   border: 1px solid var(--border);
+  outline: none;
   text-shadow: 0 1px 2px rgba(0,0,0,0.15);
   background: transparent;
-  outline: none;
+  transition: background-color 0.1s ease, color 0.1s ease;
+  flex-shrink: 0;
 }
 
-.color-picker-dropdown.expanded {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  transform: none !important; 
-  width: 100vw !important;
-  height: 100vh !important;
-  max-width: 100vw !important; 
-  max-height: 100vh !important; 
-  background: rgba(10, 9, 14, 0.98) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  display: flex !important;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  z-index: 99999;
-}
-
-.color-picker-dropdown.expanded .color-wheel {
-  width: 70vw;
-  height: 70vw;
-  max-width: 280px;
-  max-height: 280px;
-  margin: 0 auto;
-}
-
-.color-picker-dropdown.expanded .slider-group,
-.color-picker-dropdown.expanded .color-picker-live-preview,
-.color-picker-dropdown.expanded .color-picker-saved-container,
-.color-picker-dropdown.expanded .cp-done-btn {
+.cp-done-btn {
   width: 100%;
-  max-width: 280px;
+  margin-top: 16px;
+  height: 40px;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
 }
-
-.color-picker-dropdown.expanded .color-picker-live-preview {
-  order: -1; 
-  padding: 14px;
-  font-size: 18px;
-  border-radius: var(--radius);
-  margin-bottom: 20px;
-  margin-top: 0;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  border: 1px solid rgba(255,255,255,0.1);
-}
-
-.color-picker-dropdown.expanded .slider-group {
-  margin-top: 20px;
-}
-
-.color-picker-dropdown.expanded .cp-size-toggle-btn {
-  top: 30px;
-  right: 30px;
-  font-size: 24px;
-  color: var(--text);
-}
-
-.cp-size-toggle-btn {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 5;
-}
-.cp-size-toggle-btn:hover { color: var(--gold); }
 
 .color-picker-saved-container {
-  margin-top: 10px;
+  margin-top: 20px;
   border-top: 1px dashed var(--border);
-  padding-top: 10px;
+  padding-top: 14px;
+  flex-shrink: 0;
 }
 
 .color-picker-saved-headline {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   text-transform: uppercase;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
   display: flex;
   justify-content: space-between;
+  align-items: center;
+}
+
+.save-current-color-btn {
+  color: var(--teal);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: bold;
 }
 
 .color-picker-saved-slots {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  gap: 10px;
 }
 
 .saved-color-slot {
@@ -814,15 +807,36 @@ h1 {
   background: transparent;
   transition: transform 0.12s ease, border-color 0.12s ease;
 }
-
 .saved-color-slot:hover {
   transform: scale(1.15);
   border-color: var(--gold);
 }
-
 .saved-color-slot.filled {
   border-style: solid;
   border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Riordino degli elementi nel layout expanded */
+.color-picker-dialog.expanded .color-picker-live-preview {
+  order: -1;
+  padding: 14px;
+  font-size: 18px;
+  margin-bottom: 20px;
+  margin-top: 0;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.1);
+  width: 100%;
+  max-width: 350px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.color-picker-dialog.expanded .slider-group,
+.color-picker-dialog.expanded .cp-done-btn,
+.color-picker-dialog.expanded .color-picker-saved-container {
+  width: 100%;
+  max-width: 350px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 #boards-section {

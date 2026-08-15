@@ -270,39 +270,38 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   container.innerHTML = `<div class="color-swatch-btn" style="background-color: ${color}"></div>`;
   const swatchBtn = container.querySelector('.color-swatch-btn');
 
-  // STRUTTURA DEFINITIVA DELLA MODALE (Centro perfetto, nessun conflitto CSS, annullamento ok)
+  // CREAZIONE PULITA HTML, SENZA STILI INLINE CONFLITTUALI
   const modalWrapper = document.createElement('div');
   modalWrapper.className = 'color-picker-modal-wrapper';
-  modalWrapper.style.cssText = 'display:none; position:fixed; inset:0; z-index:100000; align-items:center; justify-content:center; background:rgba(8,7,12,0.8); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);';
   
   modalWrapper.innerHTML = `
-    <div class="color-picker-backdrop" style="position:absolute; inset:0; cursor:pointer;"></div>
-    <div class="color-picker-dialog" style="position:relative; z-index:1; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:24px; width:310px; max-width:90vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.8); animation:scaleUp 0.15s ease-out; display:flex; flex-direction:column;">
-      <button class="cp-size-toggle-btn" title="Toggle Full Page" type="button" style="position:absolute; top:12px; right:12px; background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:18px; padding:4px; z-index:5; transition:color 0.15s ease;">⤢</button>
+    <div class="color-picker-backdrop"></div>
+    <div class="color-picker-dialog">
+      <button class="cp-size-toggle-btn" title="Toggle Full Page" type="button">⤢</button>
       
-      <div class="color-picker-wheel-zone" style="display:flex; justify-content:center; padding:12px 0 10px;">
-        <div class="color-wheel" style="position:relative; width:200px; height:200px; border-radius:50%; cursor:crosshair; box-shadow:0 4px 15px rgba(0,0,0,0.5), inset 0 0 10px rgba(0,0,0,0.3); touch-action:none; background:conic-gradient(from 0deg, hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%), hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%));">
-          <div class="color-wheel-saturation" style="position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle, #fff 0%, transparent 100%); pointer-events:none;"></div>
-          <div class="color-wheel-lightness" style="position:absolute; inset:0; border-radius:50%; pointer-events:none;"></div>
-          <div class="color-wheel-marker" style="position:absolute; width:16px; height:16px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 4px rgba(0,0,0,0.85); transform:translate(-50%, -50%); pointer-events:none;"></div>
+      <div class="color-picker-wheel-zone">
+        <div class="color-wheel">
+          <div class="color-wheel-saturation"></div>
+          <div class="color-wheel-lightness"></div>
+          <div class="color-wheel-marker"></div>
         </div>
       </div>
       
-      <div class="slider-group" style="margin-top:16px;">
-        <label style="font-size:12px; font-family:'JetBrains Mono',monospace; color:var(--text-muted); display:flex; justify-content:space-between;">Lightness <span class="l-val">${hsl.l}%</span></label>
-        <input type="range" class="cp-light" min="0" max="100" value="${hsl.l}" style="width:100%; margin-top:8px;">
+      <div class="slider-group">
+        <label>Lightness <span class="l-val">${hsl.l}%</span></label>
+        <input type="range" class="cp-light" min="0" max="100" value="${hsl.l}">
       </div>
       
-      <input type="text" class="color-picker-live-preview" value="${color.toUpperCase()}" maxlength="7" style="width:100%; padding:10px; text-align:center; font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:bold; border-radius:8px; margin-top:20px; border:1px solid var(--border); outline:none; background-color:${color}; color:${hsl.l > 50 ? '#121118' : '#ece8e2'}; text-shadow: 0 1px 2px rgba(0,0,0,0.15); transition:background-color 0.1s ease, color 0.1s ease;">
+      <input type="text" class="color-picker-live-preview" value="${color.toUpperCase()}" maxlength="7">
       
-      <button type="button" class="btn btn-accent cp-done-btn" style="width:100%; margin-top:16px; height:40px; font-size:14px; font-weight:700;">SAVE & CLOSE</button>
+      <button type="button" class="btn btn-accent cp-done-btn">SAVE & CLOSE</button>
       
-      <div class="color-picker-saved-container" style="margin-top:20px; border-top:1px dashed var(--border); padding-top:14px;">
-        <div class="color-picker-saved-headline" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+      <div class="color-picker-saved-container">
+        <div class="color-picker-saved-headline">
           <span>Saved Colors</span>
-          <a class="save-current-color-btn" style="color:var(--teal); cursor:pointer; font-size:11px; font-weight:bold;">+ Save Current</a>
+          <a class="save-current-color-btn">+ Save Current</a>
         </div>
-        <div class="color-picker-saved-slots" style="display:grid; grid-template-columns:repeat(5, 1fr); gap:10px;"></div>
+        <div class="color-picker-saved-slots"></div>
       </div>
     </div>
   `;
@@ -322,7 +321,7 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
 
   let isDraggingWheel = false;
 
-  // APERTURA: SALVIAMO IL COLORE INIZIALE
+  // APERTURA: SALVIAMO IL COLORE INIZIALE E FORZIAMO LUM 50% SULLA RUOTA
   swatchBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     originalColor = input.value; 
@@ -336,26 +335,22 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     renderSavedColors();
   });
 
-  // CHIUSURA: CONFERMIAMO IL COLORE
+  // CHIUSURA: CONFERMIAMO IL COLORE E CHIUDIAMO CORRETTAMENTE L'ESPANSIONE
   doneBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     modalWrapper.style.display = 'none';
-    dialog.style.width = '310px';
-    dialog.style.height = 'auto';
-    dialog.style.borderRadius = '12px';
+    dialog.classList.remove('expanded');
     sizeToggleBtn.textContent = '⤢';
   });
 
-  // ANNULLAMENTO: CLICCANDO FUORI, RIPRISTINIAMO IL COLORE INIZIALE
+  // ANNULLAMENTO: CLICCANDO FUORI, RIPRISTINIAMO IL COLORE INIZIALE ESATTO
   backdrop.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     pickerInstance.setValue(originalColor);
     updateColor();
     modalWrapper.style.display = 'none';
-    dialog.style.width = '310px';
-    dialog.style.height = 'auto';
-    dialog.style.borderRadius = '12px';
+    dialog.classList.remove('expanded');
     sizeToggleBtn.textContent = '⤢';
   });
 
@@ -364,7 +359,11 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
   dialog.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
 
   function updateMarkerPosition(h, s) {
-    let currentWidth = wheel.offsetWidth || 200;
+    let currentWidth = wheel.offsetWidth;
+    // Se è nascosto, width è 0, calcoliamo approssimativamente il raggio base o espanso
+    if (currentWidth === 0) {
+      currentWidth = dialog.classList.contains('expanded') ? Math.min(350, window.innerWidth * 0.7) : 200;
+    }
     const r = currentWidth / 2;
     const angleRad = (h - 90) * (Math.PI / 180);
     const dist = (s / 100) * r;
@@ -374,27 +373,12 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     marker.style.top = `${y}px`;
   }
 
+  // ESPANSIONE: USA SOLO LA CLASSE CSS PULITA
   sizeToggleBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (dialog.style.width === '100vw') {
-      dialog.style.width = '310px';
-      dialog.style.height = 'auto';
-      dialog.style.borderRadius = '12px';
-      dialog.style.justifyContent = 'flex-start';
-      sizeToggleBtn.textContent = '⤢';
-      wheel.style.width = '200px';
-      wheel.style.height = '200px';
-    } else {
-      dialog.style.width = '100vw';
-      dialog.style.height = '100vh';
-      dialog.style.borderRadius = '0';
-      dialog.style.justifyContent = 'center';
-      sizeToggleBtn.textContent = '✕';
-      wheel.style.width = '70vw';
-      wheel.style.height = '70vw';
-      wheel.style.maxWidth = '350px';
-      wheel.style.maxHeight = '350px';
-    }
+    dialog.classList.toggle('expanded');
+    const isExpanded = dialog.classList.contains('expanded');
+    sizeToggleBtn.textContent = isExpanded ? '✕' : '⤢';
     setTimeout(() => updateMarkerPosition(hsl.h, hsl.s), 10);
   });
 
@@ -514,9 +498,6 @@ function createCustomColorPicker(container, hiddenInputId, defaultColor) {
     e.stopPropagation();
     saveColorToHistory(input.value);
   });
-
-  sizeToggleBtn.addEventListener('mouseover', () => sizeToggleBtn.style.color = 'var(--gold)');
-  sizeToggleBtn.addEventListener('mouseout', () => sizeToggleBtn.style.color = 'var(--text-muted)');
 
   const pickerInstance = {
     setValue: function(hex) {
