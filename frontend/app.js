@@ -544,7 +544,7 @@ function initGlobalCardModal() {
         
         <div class="card-wrap" style="perspective:1200px; width:460px; max-width:90vw; aspect-ratio:63/88;">
           <div class="holo-card" id="global-holo-card">
-            <img class="global-modal-img art" src="" alt="Card View" />
+            <img class="global-modal-img art" src="" alt="Card View" onerror="this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png'; this.style.objectFit='none'; this.style.opacity='0.5';" />
             <div class="layer glare"></div>
           </div>
         </div>
@@ -643,13 +643,23 @@ function initGlobalCardModal() {
       card = cardOrName || {};
     }
     
-    const imgTarget = imageUrl || card.image_large || card.image_small || '';
+    const fallbackImg = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png';
+    const imgTarget = imageUrl || card.image_large || card.image_small || fallbackImg;
     const priceTarget = priceLabel || (card.price_market ? formatPrice(card.price_market, card.currency) : 'n/a');
     const setTarget = card.set_name || (card.set && card.set.name) || '';
     const setIdTarget = card.set_id || (card.set && card.set.id) || '';
     const rarityTarget = rarityStr || card.rarity || '';
 
-    document.querySelector('.global-modal-img').src = imgTarget;
+    const imgEl = document.querySelector('.global-modal-img');
+    imgEl.src = imgTarget;
+    if (!imageUrl && !card.image_large && !card.image_small) {
+      imgEl.style.objectFit = 'none';
+      imgEl.style.opacity = '0.5';
+    } else {
+      imgEl.style.objectFit = 'cover';
+      imgEl.style.opacity = '1';
+    }
+
     document.querySelector('.global-modal-name').textContent = card.name || cardOrName || 'Custom Divider / Artwork';
     
     const setEl = document.querySelector('.global-modal-set');

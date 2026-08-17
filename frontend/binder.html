@@ -1071,9 +1071,12 @@
           tile.className = 'card-tile';
           tile.onclick = () => { assignCardToSlot(c.id); };
           const priceLabel = c.price_market ? formatPrice(c.price_market, c.currency) : 'n/a';
+          const fallbackImg = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png';
+          const safeImg = c.image_small || fallbackImg;
+          const imgStyle = !c.image_small ? 'object-fit: none; opacity: 0.6; padding: 20px;' : '';
 
           tile.innerHTML = `
-            <img src="${escapeHtml(c.image_small)}" alt="${escapeHtml(c.name)}" loading="lazy">
+            <img src="${escapeHtml(safeImg)}" alt="${escapeHtml(c.name)}" loading="lazy" style="${imgStyle}" onerror="this.src='${fallbackImg}'; this.style.objectFit='none'; this.style.opacity='0.6';">
             <div class="card-info">
               <div class="card-name">${escapeHtml(c.name)} (${escapeHtml(c.card_number)})</div>
               <div class="card-rarity set-name-link" title="Go to ${escapeHtml(c.set_name || 'Set')}" style="color:var(--teal); text-transform:none; cursor:pointer;" onclick="event.stopPropagation(); window.location.href='set.html?id=${encodeURIComponent(c.set_id)}&focus=${encodeURIComponent(c.id)}'">${escapeHtml(c.set_name || 'Unknown set')}</div>
@@ -1162,8 +1165,12 @@
           const tile = document.createElement('div');
           tile.className = 'card-tile';
           tile.onclick = () => assignCardToSlot(c.id);
+          const fallbackImg = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png';
+          const safeImg = c.image_small || fallbackImg;
+          const imgStyle = !c.image_small ? 'object-fit: none; opacity: 0.6; padding: 20px;' : '';
+
           tile.innerHTML = `
-            <img src="${escapeHtml(c.image_small)}" alt="${escapeHtml(c.name)}" loading="lazy">
+            <img src="${escapeHtml(safeImg)}" alt="${escapeHtml(c.name)}" loading="lazy" style="${imgStyle}" onerror="this.src='${fallbackImg}'; this.style.objectFit='none'; this.style.opacity='0.6';">
             <div class="card-info">
               <div class="card-name">${escapeHtml(c.name)} (${escapeHtml(c.card_number || 'N/A')})</div>
               <div class="card-rarity set-name-link" title="Go to ${escapeHtml(c.set_name || 'Set')}" style="color:var(--teal); text-transform:none; cursor:pointer;" onclick="event.stopPropagation(); window.location.href='set.html?id=${encodeURIComponent(c.set_id)}&focus=${encodeURIComponent(c.id)}'">${escapeHtml(c.set_name || 'Unknown set')}</div>
@@ -1209,8 +1216,12 @@
           const tile = document.createElement('div'); 
           tile.className = 'card-tile';
           tile.onclick = () => assignCardToSlot(c.id);
+          const fallbackImg = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png';
+          const safeImg = c.image_small || fallbackImg;
+          const imgStyle = !c.image_small ? 'object-fit: none; opacity: 0.6; padding: 20px;' : '';
+
           tile.innerHTML = `
-            <img src="${escapeHtml(c.image_small)}" alt="${escapeHtml(c.name)}" loading="lazy">
+            <img src="${escapeHtml(safeImg)}" alt="${escapeHtml(c.name)}" loading="lazy" style="${imgStyle}" onerror="this.src='${fallbackImg}'; this.style.objectFit='none'; this.style.opacity='0.6';">
             <div class="card-info">
               <div class="card-name">${escapeHtml(c.name)} (${escapeHtml(c.card_number || 'N/A')})</div>
               <div class="card-rarity set-name-link" title="Go to ${escapeHtml(c.set_name || 'Set')}" style="color:var(--teal); text-transform:none; cursor:pointer;" onclick="event.stopPropagation(); window.location.href='set.html?id=${encodeURIComponent(c.set_id)}&focus=${encodeURIComponent(c.id)}'">${escapeHtml(c.set_name || 'Unknown set')}</div>
@@ -1456,11 +1467,19 @@
             }
           });
           
+          const fallbackImg = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png';
           const imgUrl = cardData.custom_image_url || cardData.image_small;
+          let imgHtml = '';
+          if (imgUrl) {
+            imgHtml = `<img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(cardData.name || 'Card')}" draggable="false" style="pointer-events: none; object-fit: cover; width:100%; height:100%;" onerror="this.onerror=null; this.src='${fallbackImg}'; this.style.objectFit='none'; this.style.opacity='0.5';">`;
+          } else {
+            imgHtml = `<div style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,0.4); padding:8px; text-align:center; pointer-events:none;"><img src="${fallbackImg}" style="width:32px; height:32px; margin-bottom:6px; opacity:0.5;"><span style="font-family:'Rajdhani',sans-serif; font-weight:700; font-size:11px; color:var(--text-muted); line-height:1.1; word-wrap:break-word; width:100%;">${escapeHtml(cardData.name)}</span></div>`;
+          }
+
           tile.innerHTML += `
             <button class="slot-remove-btn" onclick="event.stopPropagation(); clearSlot(${slotNum})">❌</button>
             <button class="slot-move-btn" title="Move or Swap card" onclick="startCardMove(${slotNum}, event)">🔄</button>
-            <img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(cardData.name || 'Card')}" draggable="false" style="pointer-events: none; object-fit: cover; width:100%; height:100%;">
+            ${imgHtml}
           `;
         } else {
           tile.removeAttribute('draggable');
