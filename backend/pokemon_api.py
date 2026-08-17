@@ -48,6 +48,7 @@ def fetch_sets() -> list[dict]:
 def fetch_cards_for_set(set_id: str) -> list[dict]:
     """Retrieves ALL cards for a set with automatic pagination and retry logic."""
     all_cards = []
+    raw_fetched = 0
     page = 1
     page_size = 250
     max_retries = 5
@@ -82,10 +83,14 @@ def fetch_cards_for_set(set_id: str) -> list[dict]:
             raise PokemonAPIError(f"API failed to fetch cards for set {set_id} after {max_retries} retries.")
 
         batch = payload.get("data", [])
-        all_cards.extend(batch)
+        raw_fetched += len(batch)
 
-        total_count = payload.get("totalCount", len(all_cards))
-        if len(batch) < page_size or len(all_cards) >= total_count:
+        # FILTRO FONDAMENTALE: escludiamo a monte tutte le carte (come le energie base SVE) che non hanno un'immagine ufficiale
+        valid_cards = [c for c in batch if c.get("images") and c.get("images").get("small")]
+        all_cards.extend(valid_cards)
+
+        total_count = payload.get("totalCount", raw_fetched)
+        if len(batch) < page_size or raw_fetched >= total_count:
             break
         page += 1
 
@@ -99,7 +104,9 @@ def fetch_cards_by_pokedex(pokedex_number: int) -> list[dict]:
         params = {"q": f"nationalPokedexNumbers:{pokedex_number}"}
         resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=30)
         resp.raise_for_status()
-        return resp.json().get("data", [])
+        data = resp.json().get("data", [])
+        # Filtro applicato anche alla ricerca d'emergenza
+        return [c for c in data if c.get("images") and c.get("images").get("small")]
     except:
         return []
 
@@ -109,7 +116,9 @@ def fetch_cards_by_name(name: str) -> list[dict]:
         params = {"q": f"name:\"{name}*\""}
         resp = requests.get(f"{API_BASE_URL}/cards", headers=_headers(), params=params, timeout=30)
         resp.raise_for_status()
-        return resp.json().get("data", [])
+        data = resp.json().get("data", [])
+        # Filtro applicato anche alla ricerca d'emergenza
+        return [c for c in data if c.get("images") and c.get("images").get("small")]
     except:
         return []
 

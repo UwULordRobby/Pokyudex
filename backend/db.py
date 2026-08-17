@@ -174,6 +174,19 @@ def init_db():
     with get_conn() as conn:
         conn.executescript(SCHEMA)
 
+        # --- PULIZIA CARTE FANTASMA SENZA IMMAGINE ---
+        # Questo blocco interviene all'avvio: se il DB ha memorizzato energie SVE o altre carte buggate
+        # dell'API ufficiale (senza immagini), le elimina a cascata dal binder, dalla wishlist e dalla collezione
+        try:
+            conn.execute("DELETE FROM binder_slots WHERE card_id IN (SELECT id FROM cards WHERE image_small IS NULL OR image_small = '')")
+            conn.execute("DELETE FROM collection WHERE card_id IN (SELECT id FROM cards WHERE image_small IS NULL OR image_small = '')")
+            conn.execute("DELETE FROM wishlist WHERE card_id IN (SELECT id FROM cards WHERE image_small IS NULL OR image_small = '')")
+            conn.execute("DELETE FROM wishlist_board_cards WHERE card_id IN (SELECT id FROM cards WHERE image_small IS NULL OR image_small = '')")
+            conn.execute("DELETE FROM cards WHERE image_small IS NULL OR image_small = ''")
+        except Exception:
+            pass
+        # ---------------------------------------------
+
         try:
             conn.execute("ALTER TABLE cards ADD COLUMN national_dex INTEGER")
         except sqlite3.OperationalError:
