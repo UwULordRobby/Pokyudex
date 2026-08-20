@@ -36,7 +36,8 @@
     <div class="header-row">
       <div>
         <div class="eyebrow" id="set-series"></div>
-        <h1 id="set-name">Loading...</h1>
+        <h1 id="set-name" style="margin-bottom: 0;">Loading...</h1>
+        <div id="card-counter" style="font-family:'JetBrains Mono', monospace; font-size:13px; color:var(--text-muted); margin-top: 6px;"></div>
       </div>
       
       <div class="mobile-search-row" style="display:flex; gap:10px; align-items:center; flex-wrap: wrap; justify-content: flex-end;">
@@ -300,6 +301,7 @@
 
     function renderCards() {
       const container = document.getElementById('cards-container');
+      const counterEl = document.getElementById('card-counter');
       const activeType = document.getElementById('type-select').value;
       const activeName = document.getElementById('name-search').value.toLowerCase().trim();
       
@@ -308,6 +310,14 @@
       if (activeName) filtered = filtered.filter((c) => c.name.toLowerCase().includes(activeName));
       if (activeRarities.size > 0) filtered = filtered.filter((c) => activeRarities.has(c.rarity));
       if (activeType) filtered = filtered.filter((c) => (c.types || '').split(',').includes(activeType));
+
+      if (counterEl) {
+        if (allCards.length > 0) {
+          counterEl.innerHTML = `Showing <span style="color:var(--teal); font-weight:bold;">${filtered.length}</span> of <span style="font-weight:bold;">${allCards.length}</span> cards`;
+        } else {
+          counterEl.innerHTML = '';
+        }
+      }
 
       if (!filtered.length) {
         container.innerHTML = '<div class="state-msg">No cards found for this filter.</div>';
