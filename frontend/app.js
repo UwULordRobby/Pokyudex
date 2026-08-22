@@ -542,7 +542,7 @@ function initGlobalCardModal() {
       <div class="global-card-transform-container" style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; max-width:90vw;">
         <button class="modal-close" style="position:absolute; top:-18px; right:-18px; width:36px; height:36px; border-radius:50%; background:#1c1a25; border:1px solid #322f3d; color:#fff; font-size:20px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:100;">&times;</button>
         
-        <div class="card-wrap" style="perspective:1200px; width:460px; max-width:90vw; aspect-ratio:63/88;">
+        <div class="card-wrap" style="perspective:1200px; width:85vmin; max-width:420px; aspect-ratio:63/88;">
           <div class="holo-card" id="global-holo-card">
             <img class="global-modal-img art" src="" alt="Card View" onerror="this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png'; this.style.objectFit='none'; this.style.opacity='0.5';" />
             <div class="layer glare"></div>

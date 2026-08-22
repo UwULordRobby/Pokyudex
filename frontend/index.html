@@ -48,7 +48,6 @@
           <a href="binder.html" class="side-menu-link">📁 Binders</a>
           <a href="wishlist.html" class="side-menu-link">❤️ Wishlist</a>
           <a href="collezione.html" class="side-menu-link">★ My Collection</a>
-          <!-- VOCI MENU SOLO MOBILE -->
           <div class="mobile-only-menu-items">
             <a href="#" class="side-menu-link" onclick="if(typeof showAboutModal === 'function') showAboutModal()">👤 About</a>
             <a href="#" class="side-menu-link" style="color: var(--danger);" onclick="logoutUser()">🚪 Logout</a>
@@ -77,20 +76,28 @@
     </div>
 
     <div id="section-sets">
+      
+      <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 24px; flex-wrap: wrap;">
+        <input type="text" class="search-bar" id="search-input" placeholder="Search a set or a Pokémon name..." style="margin-top: 0; flex: 1; min-width: 200px;" />
+        <select id="set-sort-select" class="search-bar" style="margin-top: 0; width: auto; height: 41px;">
+          <option value="date_desc">Sort by: Release Date</option>
+          <option value="owned_desc">Sort by: Most Owned Cards (★)</option>
+          <option value="wished_desc">Sort by: Most Wished Cards (❤️)</option>
+        </select>
+      </div>
+
       <div id="favorites-section" style="display: none; margin-bottom: 34px; border-bottom: 1px solid var(--border); padding-bottom: 24px;">
         <div class="eyebrow">Quick Access</div>
         <h2 style="font-family: 'Rajdhani', sans-serif; font-size: 24px; margin: 0 0 16px;">Favorite Sets</h2>
         <div id="favorites-container"></div>
       </div>
 
-      <input type="text" class="search-bar" id="search-input" placeholder="Search a set or a Pokémon name..." />
       <div id="sets-container" style="margin-top: 20px;">
         <div class="state-msg"><span class="spinner"></span>Loading sets...</div>
       </div>
     </div>
 
     <div id="section-cards" style="display: none;">
-      <!-- Ripristinate le larghezze fisse inline per Desktop -->
       <div class="mobile-search-row" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 10px;">
         <input type="text" class="search-bar" id="card-name-input" placeholder="Card name (e.g. Charizard)..." style="margin-top: 0; flex: 1; min-width: 220px;" />
         
@@ -137,6 +144,7 @@
     const tabCardsBtn = document.getElementById('tab-cards-btn');
     const sectionSets = document.getElementById('section-sets');
     const sectionCards = document.getElementById('section-cards');
+    const setSortSelect = document.getElementById('set-sort-select');
 
     tabSetsBtn.addEventListener('click', () => {
       tabSetsBtn.className = 'chip active';
@@ -157,10 +165,11 @@
 
     async function executeSetSearch() {
       const query = document.getElementById('search-input').value.toLowerCase().trim();
+      const sortVal = setSortSelect.value;
       const favSection = document.getElementById('favorites-section');
       const container = document.getElementById('sets-container');
       
-      if (!query) {
+      if (!query && sortVal === 'date_desc') {
          const favoriteSets = allSets.filter(s => s.is_favorite).sort((a, b) => (a.fav_sort_order ?? 0) - (b.fav_sort_order ?? 0));
          if (favoriteSets.length > 0) {
            favSection.style.display = 'block';
@@ -191,6 +200,8 @@
       clearTimeout(searchDebounce);
       searchDebounce = setTimeout(executeSetSearch, 400);
     });
+
+    setSortSelect.addEventListener('change', executeSetSearch);
 
     function renderSetsPage() {
        executeSetSearch();
@@ -243,6 +254,43 @@
           reorderFavorites(draggedId, targetId);
         });
 
+        const handle = tile.querySelector('.drag-handle');
+        if (handle) {
+          let touchDragEl = null;
+          handle.addEventListener('touchstart', (e) => {
+            touchDragEl = tile;
+            window.draggedFavoriteSetId = s.id;
+            tile.classList.add('dragging');
+            e.preventDefault(); 
+          }, {passive: false});
+
+          handle.addEventListener('touchmove', (e) => {
+            if (!touchDragEl) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+            const targetTile = elem ? elem.closest('.set-tile') : null;
+            document.querySelectorAll('#favorites-container .set-tile').forEach(t => t.classList.remove('drag-over'));
+            if (targetTile && targetTile !== touchDragEl && targetTile.dataset.setId) {
+              targetTile.classList.add('drag-over');
+            }
+          }, {passive: false});
+
+          handle.addEventListener('touchend', (e) => {
+            if (!touchDragEl) return;
+            touchDragEl.classList.remove('dragging');
+            const touch = e.changedTouches[0];
+            const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+            const targetTile = elem ? elem.closest('.set-tile') : null;
+            document.querySelectorAll('#favorites-container .set-tile').forEach(t => t.classList.remove('drag-over'));
+            if (targetTile && targetTile !== touchDragEl && targetTile.dataset.setId) {
+              reorderFavorites(window.draggedFavoriteSetId, targetTile.dataset.setId);
+            }
+            touchDragEl = null;
+            window.draggedFavoriteSetId = undefined;
+          });
+        }
+
         grid.appendChild(tile);
       });
       container.innerHTML = '';
@@ -286,54 +334,90 @@
       }
       
       container.innerHTML = '';
-      const groups = {};
-      const eraOrder = [];
+      const sortVal = document.getElementById('set-sort-select').value;
+      let displaySets = [...sets];
 
-      sets.forEach((s) => {
-        let era = s.series || 'Other';
-        if (era.toLowerCase() === 'xy') {
-          era = 'XY / Mega Evolution';
-        }
-        
-        if (!groups[era]) {
-          groups[era] = [];
-          eraOrder.push(era);
-        }
-        groups[era].push(s);
-      });
+      if (sortVal === 'owned_desc') {
+        displaySets.sort((a, b) => (b.owned_count || 0) - (a.owned_count || 0));
+      } else if (sortVal === 'wished_desc') {
+        displaySets.sort((a, b) => (b.wished_count || 0) - (a.wished_count || 0));
+      }
 
-      eraOrder.forEach((era) => {
-        const separator = document.createElement('div');
-        separator.className = 'era-separator-header';
-        
-        const title = document.createElement('h3');
-        title.className = 'era-separator-title';
-        title.textContent = era;
-        
-        separator.appendChild(title);
-        container.appendChild(separator);
+      if (sortVal === 'date_desc') {
+        const groups = {};
+        const eraOrder = [];
 
+        displaySets.forEach((s) => {
+          let era = s.series || 'Other';
+          if (era.toLowerCase() === 'xy') {
+            era = 'XY / Mega Evolution';
+          }
+          if (!groups[era]) {
+            groups[era] = [];
+            eraOrder.push(era);
+          }
+          groups[era].push(s);
+        });
+
+        eraOrder.forEach((era) => {
+          const separator = document.createElement('div');
+          separator.className = 'era-separator-header';
+          
+          const title = document.createElement('h3');
+          title.className = 'era-separator-title';
+          title.textContent = era;
+          
+          separator.appendChild(title);
+          container.appendChild(separator);
+
+          const grid = document.createElement('div');
+          grid.className = 'sets-grid';
+          grid.style.marginTop = '12px';
+          grid.style.marginBottom = '28px';
+
+          groups[era].forEach((s) => {
+            const tile = document.createElement('div');
+            tile.className = 'set-tile';
+            tile.style.position = 'relative';
+            tile.onclick = () => { window.location.href = `set.html?id=${encodeURIComponent(s.id)}`; };
+            tile.innerHTML = `
+              <button class="collect-btn ${s.is_favorite ? 'owned' : ''}" style="top: 8px; right: 8px; left: auto; font-size:14px;" onclick="event.stopPropagation(); toggleFavoriteSet('${s.id}', this)">★</button>
+              ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
+              <div class="set-name">${escapeHtml(s.name)}</div>
+              <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+            `;
+            grid.appendChild(tile);
+          });
+
+          container.appendChild(grid);
+        });
+      } else {
         const grid = document.createElement('div');
         grid.className = 'sets-grid';
-        grid.style.marginTop = '12px';
-        grid.style.marginBottom = '28px';
-
-        groups[era].forEach((s) => {
+        displaySets.forEach((s) => {
           const tile = document.createElement('div');
           tile.className = 'set-tile';
           tile.style.position = 'relative';
           tile.onclick = () => { window.location.href = `set.html?id=${encodeURIComponent(s.id)}`; };
+          
+          let countInfo = '';
+          if (sortVal === 'owned_desc' && s.owned_count > 0) {
+            countInfo = `<div style="font-family:'JetBrains Mono'; font-size:11px; color:var(--teal); margin-top:4px; font-weight:700;">★ ${s.owned_count} Owned</div>`;
+          } else if (sortVal === 'wished_desc' && s.wished_count > 0) {
+            countInfo = `<div style="font-family:'JetBrains Mono'; font-size:11px; color:var(--danger); margin-top:4px; font-weight:700;">❤️ ${s.wished_count} Wished</div>`;
+          }
+
           tile.innerHTML = `
             <button class="collect-btn ${s.is_favorite ? 'owned' : ''}" style="top: 8px; right: 8px; left: auto; font-size:14px;" onclick="event.stopPropagation(); toggleFavoriteSet('${s.id}', this)">★</button>
             ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
             <div class="set-name">${escapeHtml(s.name)}</div>
             <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+            ${countInfo}
           `;
           grid.appendChild(tile);
         });
-
         container.appendChild(grid);
-      });
+      }
     }
 
     async function loadSets() {

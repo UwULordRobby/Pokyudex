@@ -175,8 +175,6 @@ def init_db():
         conn.executescript(SCHEMA)
 
         # --- PULIZIA CARTE FANTASMA SENZA IMMAGINE ---
-        # Questo blocco interviene all'avvio: se il DB ha memorizzato energie SVE o altre carte buggate
-        # dell'API ufficiale (senza immagini), le elimina a cascata dal binder, dalla wishlist e dalla collezione
         try:
             conn.execute("DELETE FROM binder_slots WHERE card_id IN (SELECT id FROM cards WHERE image_small IS NULL OR image_small = '')")
             conn.execute("DELETE FROM collection WHERE card_id IN (SELECT id FROM cards WHERE image_small IS NULL OR image_small = '')")
@@ -341,12 +339,15 @@ def mark_set_synced(conn, set_id: str, timestamp: str):
 
 
 def get_all_sets(conn, user_id=None):
+    # Aggiunti contatori dinamici per carte possedute e desiderate
     return conn.execute(
-        """SELECT *,
-           (SELECT 1 FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS is_favorite,
-           (SELECT sort_order FROM favorite_sets WHERE set_id = sets.id AND user_id = ?) AS fav_sort_order
-           FROM sets ORDER BY release_date DESC""",
-        (user_id, user_id),
+        """SELECT s.*,
+           (SELECT 1 FROM favorite_sets WHERE set_id = s.id AND user_id = ?) AS is_favorite,
+           (SELECT sort_order FROM favorite_sets WHERE set_id = s.id AND user_id = ?) AS fav_sort_order,
+           (SELECT COUNT(*) FROM collection c JOIN cards cd ON c.card_id = cd.id WHERE cd.set_id = s.id AND c.user_id = ?) AS owned_count,
+           (SELECT COUNT(*) FROM wishlist w JOIN cards cd ON w.card_id = cd.id WHERE cd.set_id = s.id AND w.user_id = ?) AS wished_count
+           FROM sets s ORDER BY s.release_date DESC""",
+        (user_id, user_id, user_id, user_id),
     ).fetchall()
 
 
