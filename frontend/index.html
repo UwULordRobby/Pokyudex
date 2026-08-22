@@ -207,6 +207,15 @@
        executeSetSearch();
     }
 
+    function getSetCountsHtml(s) {
+      return `
+        <div style="display: flex; gap: 14px; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; margin-top: 8px; font-weight: 700; width: 100%;">
+          <span style="color: ${s.owned_count > 0 ? 'var(--teal)' : 'var(--text-muted)'}; opacity: ${s.owned_count > 0 ? '1' : '0.4'};">★ ${s.owned_count || 0}</span>
+          <span style="color: ${s.wished_count > 0 ? 'var(--danger)' : 'var(--text-muted)'}; opacity: ${s.wished_count > 0 ? '1' : '0.4'};">❤️ ${s.wished_count || 0}</span>
+        </div>
+      `;
+    }
+
     function renderFavoritesGrid(sets, container) {
       if (!sets.length) { container.innerHTML = ''; return; }
       const grid = document.createElement('div');
@@ -228,6 +237,7 @@
           ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
           <div class="set-name">${escapeHtml(s.name)}</div>
           <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+          ${getSetCountsHtml(s)}
         `;
 
         tile.addEventListener('dragstart', (e) => {
@@ -385,6 +395,7 @@
               ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
               <div class="set-name">${escapeHtml(s.name)}</div>
               <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
+              ${getSetCountsHtml(s)}
             `;
             grid.appendChild(tile);
           });
@@ -400,19 +411,12 @@
           tile.style.position = 'relative';
           tile.onclick = () => { window.location.href = `set.html?id=${encodeURIComponent(s.id)}`; };
           
-          let countInfo = '';
-          if (sortVal === 'owned_desc' && s.owned_count > 0) {
-            countInfo = `<div style="font-family:'JetBrains Mono'; font-size:11px; color:var(--teal); margin-top:4px; font-weight:700;">★ ${s.owned_count} Owned</div>`;
-          } else if (sortVal === 'wished_desc' && s.wished_count > 0) {
-            countInfo = `<div style="font-family:'JetBrains Mono'; font-size:11px; color:var(--danger); margin-top:4px; font-weight:700;">❤️ ${s.wished_count} Wished</div>`;
-          }
-
           tile.innerHTML = `
             <button class="collect-btn ${s.is_favorite ? 'owned' : ''}" style="top: 8px; right: 8px; left: auto; font-size:14px;" onclick="event.stopPropagation(); toggleFavoriteSet('${s.id}', this)">★</button>
             ${s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" onerror="this.style.display='none'">` : ''}
             <div class="set-name">${escapeHtml(s.name)}</div>
             <div class="set-meta">${escapeHtml(s.series || '')}${s.release_date ? ' · ' + escapeHtml(s.release_date) : ''}</div>
-            ${countInfo}
+            ${getSetCountsHtml(s)}
           `;
           grid.appendChild(tile);
         });
